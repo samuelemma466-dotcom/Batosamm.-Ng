@@ -1,0 +1,8 @@
+{
+  "name": "Bato Sam Digital Hub",
+  "description": "A premium, high-end corporate portal for Bato Sam Digital Hub (BATO SAM. NG), offering AI-assisted Corporate Affairs (CAC) registration, digital printing solutions, tech training academy, and tracking pipeline.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

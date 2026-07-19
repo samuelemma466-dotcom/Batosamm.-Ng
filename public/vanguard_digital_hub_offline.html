@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vanguard Digital Hub - Portal</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Inter & Space Grotesk Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .font-display {
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    /* Custom glassy blur effects */
+    .glass-card {
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-light {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    /* Hide scrollbar */
+    .scrollbar-none::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-none {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 selection:bg-blue-500/20 overflow-x-hidden">
+
+  <!-- Top Global Header -->
+  <header class="sticky top-0 z-50 w-full border-b border-white/10 bg-slate-900/80 backdrop-blur-md text-white">
+    <div class="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
+      
+      <!-- Logo Brand -->
+      <div onclick="scrollToSection('hero')" class="flex cursor-pointer items-center gap-3 transition-opacity hover:opacity-90">
+        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-500/20">
+          <i data-lucide="shield-check" class="h-6 w-6"></i>
+        </div>
+        <div>
+          <span class="font-display text-xl font-extrabold tracking-tight text-white block">VANGUARD</span>
+          <span class="block text-[9px] font-mono font-bold text-slate-400 tracking-wider uppercase -mt-1">DIGITAL HUB</span>
+        </div>
+      </div>
+
+      <!-- Navigation Links -->
+      <nav class="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-300">
+        <button onclick="scrollToSection('services')" class="hover:text-white transition-colors cursor-pointer">Services</button>
+        <button onclick="scrollToSection('cac-intake')" class="hover:text-white transition-colors cursor-pointer">CAC Intake</button>
+        <button onclick="scrollToSection('command-center')" class="hover:text-white transition-colors cursor-pointer">Print Command</button>
+        <button onclick="scrollToSection('academy')" class="hover:text-white transition-colors cursor-pointer">Academy</button>
+        <button onclick="scrollToSection('process')" class="hover:text-white transition-colors cursor-pointer">Pipeline</button>
+      </nav>
+
+      <!-- Configuration Settings Gear -->
+      <div class="flex items-center gap-3">
+        <button onclick="toggleConfigBanner()" title="Configure Target WhatsApp" class="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-all cursor-pointer relative">
+          <i data-lucide="settings" class="h-4.5 w-4.5 text-slate-300"></i>
+          <span class="absolute -top-1 -right-1 flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+          </span>
+        </button>
+        
+        <button id="adminExitBtn" onclick="deauthenticateAdmin()" class="hidden rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-red-500 transition-all cursor-pointer">
+          Exit Admin
+        </button>
+        <button id="navEnrollBtn" onclick="scrollToSection('academy')" class="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg hover:bg-blue-500 transition-all cursor-pointer">
+          <i data-lucide="award" class="h-4 w-4"></i>Enroll Portal
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Target WhatsApp configuration banner -->
+    <div id="phoneConfigBanner" class="hidden bg-slate-950/95 border-b border-white/10 p-4 transition-all">
+      <div class="mx-auto max-w-2xl">
+        <div class="flex flex-col sm:flex-row items-center gap-4">
+          <div class="flex-1 text-center sm:text-left">
+            <p class="text-xs font-bold text-white uppercase tracking-wider flex items-center justify-center sm:justify-start gap-1.5">
+              <i data-lucide="phone" class="h-4 w-4 text-emerald-400"></i>Configure Your Target WhatsApp Phone Number
+            </p>
+            <p class="text-[10px] text-slate-400 mt-0.5 font-medium">
+              Enter your phone number with country code (no spaces/plus) to receive leads directly on WhatsApp.
+            </p>
+          </div>
+          <div class="flex gap-2 w-full sm:w-auto">
+            <input
+              id="whatsappPhoneInput"
+              type="text"
+              required
+              placeholder="e.g. 2348031234567"
+              value="2348030000000"
+              class="flex-1 sm:w-48 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-mono font-medium text-white placeholder-slate-500 focus:border-blue-500 outline-none"
+            />
+            <button
+              onclick="savePhoneConfiguration()"
+              class="flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3.5 py-2 text-xs font-bold text-white transition-colors cursor-pointer"
+            >
+              <i data-lucide="save" class="h-3.5 w-3.5"></i>Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Admin Dashboard Container (Hidden by Default) -->
+  <div id="adminDashboardSection" class="hidden bg-slate-900 border-b border-white/10 text-white py-16 animate-in fade-in duration-500">
+    <div class="mx-auto max-w-7xl px-6">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-8 mb-10">
+        <div>
+          <div class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-400">
+            <i data-lucide="shield-alert" class="h-4 w-4"></i>Staff Operations Center Active
+          </div>
+          <h2 class="mt-3 font-display text-3xl font-extrabold tracking-tight">Administrative Command Dashboard</h2>
+          <p class="text-slate-400 text-xs mt-1.5 font-semibold">Real-time workspace pipeline visualization. Manage registrations, admissions, and print files.</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button onclick="purgeOfflineJobs()" class="flex items-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 px-4 py-2.5 text-xs font-bold text-red-400 transition-all cursor-pointer">
+            <i data-lucide="trash-2" class="h-4 w-4"></i>Purge Database
+          </button>
+          <button onclick="deauthenticateAdmin()" class="flex items-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 px-4 py-2.5 text-xs font-bold text-white transition-all cursor-pointer">
+            Exit Terminal
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Metrics -->
+      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-10">
+        <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+          <p class="font-mono text-[9px] font-bold text-slate-500 uppercase tracking-widest">Total Pending Jobs</p>
+          <p id="totalJobsMetric" class="text-3xl font-black text-white mt-1">3</p>
+        </div>
+        <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+          <p class="font-mono text-[9px] font-bold text-slate-500 uppercase tracking-widest">CAC Name Intake Reviews</p>
+          <p id="cacJobsMetric" class="text-3xl font-black text-blue-400 mt-1">1</p>
+        </div>
+        <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+          <p class="font-mono text-[9px] font-bold text-slate-500 uppercase tracking-widest">Aggregate Estimated Revenue</p>
+          <p id="printRevMetric" class="text-3xl font-black text-emerald-400 mt-1">$14.70</p>
+        </div>
+        <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+          <p class="font-mono text-[9px] font-bold text-slate-500 uppercase tracking-widest">Academy Admissions</p>
+          <p id="enrollJobsMetric" class="text-3xl font-black text-indigo-400 mt-1">1</p>
+        </div>
+      </div>
+
+      <!-- Queue List -->
+      <div class="rounded-2xl border border-white/10 bg-slate-950/40 overflow-hidden shadow-2xl">
+        <div class="p-5 border-b border-white/5 bg-slate-950/20 flex items-center justify-between">
+          <h4 class="font-display text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <i data-lucide="clock" class="h-4 w-4 text-blue-400"></i>Incoming Pipeline Tasks Queue
+          </h4>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-950/30 text-[10px] font-black uppercase tracking-wider text-slate-500 border-b border-white/5">
+                <th class="p-4">Reference ID</th>
+                <th class="p-4">Category</th>
+                <th class="p-4">Project Parameters</th>
+                <th class="p-4">Submission Date</th>
+                <th class="p-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="adminJobsTableBody" class="divide-y divide-white/5 text-xs font-semibold text-slate-300">
+              <!-- Rendered Dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Standard Client Workspace Content -->
+  <div id="clientWorkspace">
+    
+    <!-- Hero Block -->
+    <section id="hero" class="relative overflow-hidden py-24 md:py-32">
+      <div class="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.05)_1px,transparent_1px)] [background-size:24px_24px] z-0" />
+      <div class="absolute top-1/4 left-1/4 h-[400px] w-[400px] rounded-full bg-blue-600/10 blur-3xl z-0" />
+      
+      <div class="relative z-10 mx-auto max-w-7xl px-6">
+        <div class="grid gap-12 lg:grid-cols-12 lg:items-center">
+          <div class="lg:col-span-7 flex flex-col items-start space-y-7">
+            <div class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-xs font-semibold text-slate-300 shadow-lg">
+              <i data-lucide="star" class="h-3.5 w-3.5 fill-blue-400 text-blue-400"></i>
+              <span>Premium Business Operations & Tech Academy</span>
+            </div>
+            <h1 class="font-display text-4xl font-extrabold tracking-tight sm:text-5xl md:text-6xl lg:leading-[1.1]">
+              Elevate Your <span class="bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">Digital Frontier</span> & Corporate Registration
+            </h1>
+            <p class="max-w-xl text-sm md:text-base leading-relaxed text-slate-400">
+              Vanguard Digital Hub provides automated, premium business utilities. File error-free Corporate Affairs (CAC) business name applications, access high-precision high-volume print pipelines, and enroll in certified coding academies.
+            </p>
+            <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto pt-2">
+              <button onclick="scrollToSection('services')" class="group flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-7 py-4 text-sm font-bold text-white shadow-lg hover:bg-blue-500 transition-all cursor-pointer">
+                Access Command Center
+                <i data-lucide="arrow-right" class="h-4.5 w-4.5"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="lg:col-span-5 relative flex justify-center">
+            <div class="absolute -inset-1 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 opacity-20 blur-xl" />
+            <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/60 p-6 shadow-2xl backdrop-blur-xl">
+              <div class="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
+                <div class="flex gap-1.5">
+                  <div class="h-3 w-3 rounded-full bg-red-500/80"></div>
+                  <div class="h-3 w-3 rounded-full bg-yellow-500/80"></div>
+                  <div class="h-3 w-3 rounded-full bg-green-500/80"></div>
+                </div>
+                <span class="font-mono text-[9px] text-slate-500 font-bold uppercase tracking-widest">Fulfillment_VGA_HQ</span>
+              </div>
+              <div class="space-y-4 text-xs">
+                <div class="rounded-lg bg-slate-950/40 p-3.5 border border-white/5">
+                  <p class="font-mono text-[9px] text-blue-400 font-bold tracking-wider uppercase">CAC SUITABILITY PIPELINE</p>
+                  <p class="text-white font-bold mt-1.5">CAC Smart Name Intake Form</p>
+                  <p class="text-slate-400 text-[11px] mt-1">Simulated legal review with instant eligibility metrics.</p>
+                </div>
+                <div class="rounded-lg bg-slate-950/40 p-3.5 border border-white/5">
+                  <p class="font-mono text-[9px] text-blue-400 font-bold tracking-wider uppercase">PRINT SYSTEM CONSOLE</p>
+                  <p class="text-white font-bold mt-1.5">Print & Document Command Center</p>
+                  <p class="text-slate-400 text-[11px] mt-1">Live calculation of costs for Printing, Copying, and Binding.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Services Ecosystem -->
+    <section id="services" class="bg-slate-900 text-white py-24 border-y border-white/5 relative overflow-hidden">
+      <div class="mx-auto max-w-7xl px-6 relative z-10">
+        <div class="text-center max-w-3xl mx-auto mb-16">
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-blue-400">Services Ecosystem</p>
+          <h2 class="mt-2 font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Vanguard Interactive Pillars</h2>
+        </div>
+        <div class="grid gap-8 md:grid-cols-3">
+          <!-- CAC -->
+          <div class="glass-card rounded-2xl p-8 flex flex-col justify-between">
+            <div>
+              <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 mb-6">
+                <i data-lucide="shield-alert" class="h-6 w-6"></i>
+              </div>
+              <h3 class="font-display text-lg font-bold text-white">Corporate Affairs (CAC)</h3>
+              <p class="mt-3 text-xs text-slate-400 leading-relaxed font-semibold">Fast-track legal establishment. Enter your preferred business structure to run simulated legal checks, review compliance scores, and download draft guidelines.</p>
+            </div>
+            <button onclick="scrollToSection('cac-intake')" class="mt-8 flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-bold text-slate-200 hover:bg-white/10 transition-all">
+              Access Tool <i data-lucide="chevron-right" class="h-4 w-4"></i>
+            </button>
+          </div>
+          <!-- Print -->
+          <div class="glass-card rounded-2xl p-8 flex flex-col justify-between">
+            <div>
+              <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 mb-6">
+                <i data-lucide="printer" class="h-6 w-6"></i>
+              </div>
+              <h3 class="font-display text-lg font-bold text-white">Print & Job Command</h3>
+              <p class="mt-3 text-xs text-slate-400 leading-relaxed font-semibold">Configure corporate paper orders, high-volume documentation, binding settings, or design/typing contracts. Get a real-time price quotation dynamically.</p>
+            </div>
+            <button onclick="scrollToSection('command-center')" class="mt-8 flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-bold text-slate-200 hover:bg-white/10 transition-all">
+              Access Tool <i data-lucide="chevron-right" class="h-4 w-4"></i>
+            </button>
+          </div>
+          <!-- Academy -->
+          <div class="glass-card rounded-2xl p-8 flex flex-col justify-between">
+            <div>
+              <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 mb-6">
+                <i data-lucide="graduation-cap" class="h-6 w-6"></i>
+              </div>
+              <h3 class="font-display text-lg font-bold text-white">Tech Academy</h3>
+              <p class="mt-3 text-xs text-slate-400 leading-relaxed font-semibold">Acquire market-ready professional skills. Register for Coding or Advanced corporate administration programs, with live batch registration countdowns.</p>
+            </div>
+            <button onclick="scrollToSection('academy')" class="mt-8 flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-bold text-slate-200 hover:bg-white/10 transition-all">
+              Access Tool <i data-lucide="chevron-right" class="h-4 w-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CAC Intake Section -->
+    <section id="cac-intake" class="bg-white py-24 border-b border-slate-100 text-slate-900">
+      <div class="mx-auto max-w-7xl px-6">
+        <div class="text-center max-w-3xl mx-auto mb-16">
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-blue-600">Automated Legal Desk</p>
+          <h2 class="mt-2 font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">The Smart CAC Intake & AI Registry Check</h2>
+        </div>
+
+        <div class="grid gap-12 lg:grid-cols-12 lg:items-start">
+          <div class="lg:col-span-6 space-y-6">
+            <div class="space-y-5 rounded-2xl border border-slate-200 bg-slate-50/40 p-6 sm:p-8">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Proposed Business Name</label>
+                <input id="proposedNameInput" type="text" placeholder="e.g. Apex Global Logistics" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold outline-none focus:border-blue-500 transition-all text-slate-900" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Legal Configuration</label>
+                <select id="entityTypeInput" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-900 outline-none">
+                  <option>Private Limited Company (LTD)</option>
+                  <option>Sole Proprietorship (Business Name)</option>
+                  <option>Incorporated Trustees (NGO/Association)</option>
+                </select>
+              </div>
+              <button onclick="triggerSimulatedCacCheck()" class="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 py-3.5 text-xs font-bold text-white transition-colors cursor-pointer">
+                <i data-lucide="sparkles" class="h-4 w-4"></i>Initiate AI Suitability Check
+              </button>
+            </div>
+          </div>
+
+          <!-- Report Display Column -->
+          <div class="lg:col-span-6">
+            <div class="rounded-2xl border border-slate-200 bg-slate-50/10 p-6 sm:p-8 min-h-[300px] flex flex-col justify-between relative overflow-hidden">
+              <div class="absolute top-0 right-0 bg-blue-500/10 text-blue-600 px-3 py-1 text-[9px] font-black uppercase tracking-wider">Vanguard Registry</div>
+              
+              <div id="cacInitialState" class="flex flex-col items-center justify-center text-center py-20">
+                <i data-lucide="sparkles" class="h-10 w-10 text-slate-300 mb-4"></i>
+                <h5 class="font-display text-sm font-bold text-slate-800">Operational Waiting Mode</h5>
+                <p class="max-w-xs text-xs text-slate-500 mt-2 font-semibold">Enter your proposed business name and entity type on the left to scan standard trademark suitability index records instantly.</p>
+              </div>
+
+              <div id="cacLoadingState" class="hidden py-16 space-y-6">
+                <div class="flex flex-col items-center justify-center text-center">
+                  <div class="h-8 w-8 animate-spin border-4 border-blue-600 border-t-transparent rounded-full mb-4"></div>
+                  <h5 class="font-display text-xs font-black uppercase text-slate-400">Scanning Database registries...</h5>
+                </div>
+                <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                  <div class="bg-blue-600 h-full rounded-full transition-all duration-150" style="width: 30%"></div>
+                </div>
+              </div>
+
+              <div id="cacReportState" class="hidden space-y-6">
+                <div class="flex items-center justify-between rounded-xl bg-white border border-slate-100 p-4">
+                  <div>
+                    <p class="text-[9px] font-bold text-slate-400 uppercase">Filing Rating</p>
+                    <p class="text-xs font-black text-emerald-600 mt-0.5">Highly Feasible</p>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-[9px] font-bold text-slate-400 uppercase font-mono">Similarity Score</p>
+                    <p class="text-xl font-black text-slate-900 mt-0.5">92%</p>
+                  </div>
+                </div>
+                <div>
+                  <h5 class="text-[10px] font-bold text-slate-700 uppercase">Suitability Audit Narrative</h5>
+                  <p class="rounded-xl bg-white border border-slate-100 p-4 text-xs font-semibold leading-relaxed text-slate-600">The proposed brand exhibits highly favorable trademark profiles. Preliminary sandbox registry matches find no direct conflicts in technology, retail, or consulting clusters.</p>
+                </div>
+                <div class="flex justify-end">
+                  <button onclick="submitCacViaWhatsApp()" class="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 px-5 py-3 text-xs font-bold text-white shadow-md cursor-pointer">
+                    Submit via WhatsApp <i data-lucide="arrow-right" class="h-4 w-4"></i>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Print Hub Section -->
+    <section id="command-center" class="bg-slate-50 py-24 border-b border-slate-200 text-slate-900">
+      <div class="mx-auto max-w-7xl px-6">
+        <div class="text-center max-w-3xl mx-auto mb-16">
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-blue-600">The Command Center</p>
+          <h2 class="mt-2 font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">Print & Job Command Desk</h2>
+        </div>
+
+        <div class="grid gap-12 lg:grid-cols-12 lg:items-start">
+          <div class="lg:col-span-7 space-y-6">
+            <div class="grid grid-cols-4 gap-2">
+              <button onclick="selectPrintCategory('Print')" id="btnCatPrint" class="rounded-xl py-3 text-xs font-bold border border-slate-950 bg-slate-950 text-white transition-all text-center">Print</button>
+              <button onclick="selectPrintCategory('Scan')" id="btnCatScan" class="rounded-xl py-3 text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">Scan</button>
+              <button onclick="selectPrintCategory('Graphic Design')" id="btnCatGraphic" class="rounded-xl py-3 text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">Design</button>
+              <button onclick="selectPrintCategory('Typing Job')" id="btnCatTyping" class="rounded-xl py-3 text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">Typing</button>
+            </div>
+
+            <!-- Customizer form -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 space-y-5">
+              <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Page Count</label>
+                  <input id="printPagesInput" type="number" min="1" value="10" oninput="calculatePrintQuote()" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-900 outline-none" />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Quantity (Copies)</label>
+                  <input id="printQtyInput" type="number" min="1" value="1" oninput="calculatePrintQuote()" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-900 outline-none" />
+                </div>
+              </div>
+
+              <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Color Mode</label>
+                  <select id="printColorInput" onchange="calculatePrintQuote()" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-900 outline-none">
+                    <option value="Mono">B&W Monochrome</option>
+                    <option value="Color">Color Premium</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Finishing & Binding</label>
+                  <select id="printBindingInput" onchange="calculatePrintQuote()" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-900 outline-none">
+                    <option value="None">Loose Pages</option>
+                    <option value="Spiral">Spiral Binding</option>
+                    <option value="Hardback">Hardback Cover</option>
+                  </select>
+                </div>
+              </div>
+
+              <button onclick="submitPrintViaWhatsApp()" class="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white py-4 text-xs font-bold transition-all">
+                <i data-lucide="printer" class="h-4.5 w-4.5 text-blue-400"></i>Generate Dynamic Invoice Order
+              </button>
+            </div>
+          </div>
+
+          <!-- Invoice Details Column -->
+          <div class="lg:col-span-5">
+            <div class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-md relative overflow-hidden">
+              <div class="absolute top-0 right-0 bg-slate-900 text-white px-3.5 py-1 text-[9px] font-bold uppercase tracking-widest font-mono">Invoice Offline</div>
+              
+              <div class="flex items-center gap-3 border-b border-slate-100 pb-5 mb-6">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600 border border-blue-100">
+                  <i data-lucide="file-text" class="h-5 w-5"></i>
+                </div>
+                <div>
+                  <h4 class="font-display text-sm font-extrabold text-slate-900">Live Cost Valuation</h4>
+                  <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Real-time quote estimates</p>
+                </div>
+              </div>
+
+              <div class="rounded-xl bg-slate-900 p-5 text-white">
+                <p class="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-widest">Aggregate Net Estimate</p>
+                <div class="flex items-baseline gap-1 mt-1">
+                  <span id="invoiceSubtotalText" class="text-3xl font-black tracking-tight">$4.30</span>
+                  <span class="text-xs font-bold text-slate-400">USD</span>
+                </div>
+              </div>
+
+              <div class="space-y-4 py-6 text-xs font-semibold text-slate-500">
+                <div class="flex justify-between">
+                  <span>Job Category:</span>
+                  <strong id="invoiceCategoryText" class="text-slate-900 uppercase">Print</strong>
+                </div>
+                <div class="flex justify-between">
+                  <span>Pages & Copies:</span>
+                  <strong id="invoiceScopeText" class="text-slate-900">10 Pages • 1 Copy</strong>
+                </div>
+                <div class="flex justify-between">
+                  <span>Layout & Binding:</span>
+                  <strong id="invoiceFinishingText" class="text-slate-900">Mono • Loose Pages</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Student Academy & Countdown Section -->
+    <section id="academy" class="bg-slate-950 text-white py-24 relative overflow-hidden">
+      <div class="mx-auto max-w-7xl px-6 relative z-10">
+        <div class="text-center max-w-3xl mx-auto mb-16">
+          <p class="font-mono text-xs font-bold uppercase tracking-widest text-blue-400">Skills Accelerator</p>
+          <h2 class="mt-2 font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Student Enrollment Engine</h2>
+        </div>
+
+        <!-- Timer Widget -->
+        <div class="max-w-4xl mx-auto mb-16 rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 backdrop-blur-md text-center">
+          <p class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-6">Admissions Closes for Next Batch In:</p>
+          <div class="flex justify-center items-center gap-4 sm:gap-8">
+            <div class="flex flex-col">
+              <span id="countdownDaysText" class="text-4xl sm:text-5xl font-black text-blue-400 font-mono">14</span>
+              <span class="text-[10px] font-black uppercase text-slate-500 mt-1">Days</span>
+            </div>
+            <span class="text-2xl text-slate-600 -mt-5">:</span>
+            <div class="flex flex-col">
+              <span id="countdownHoursText" class="text-4xl sm:text-5xl font-black text-white font-mono">05</span>
+              <span class="text-[10px] font-black uppercase text-slate-500 mt-1">Hours</span>
+            </div>
+            <span class="text-2xl text-slate-600 -mt-5">:</span>
+            <div class="flex flex-col">
+              <span id="countdownMinsText" class="text-4xl sm:text-5xl font-black text-white font-mono">24</span>
+              <span class="text-[10px] font-black uppercase text-slate-500 mt-1">Mins</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Form and details -->
+        <div class="grid gap-12 lg:grid-cols-12 lg:items-start">
+          <div class="lg:col-span-6 space-y-6">
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 backdrop-blur-xl">
+              <h4 class="font-display text-sm font-extrabold text-white mb-6">Interactive Enrollment Desk</h4>
+              
+              <div class="space-y-4">
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Candidate Full Name</label>
+                  <input id="enrollNameInput" type="text" placeholder="John Doe" class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold outline-none" />
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Candidate Email</label>
+                    <input id="enrollEmailInput" type="email" placeholder="john@example.com" class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold outline-none" />
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">WhatsApp Contact</label>
+                    <input id="enrollPhoneInput" type="text" placeholder="+23481234567" class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Career Program</label>
+                  <select id="enrollCourseInput" class="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-xs font-semibold outline-none">
+                    <option>Web Development Mastery (1 Month)</option>
+                    <option>Microsoft Office Suite Efficiency Mastery</option>
+                  </select>
+                </div>
+                <button onclick="submitEnrollmentViaWhatsApp()" class="w-full flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 py-4 text-xs font-bold text-white transition-all cursor-pointer">
+                  <i data-lucide="sparkles" class="h-4 w-4"></i>Authorize Portal Registration
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="lg:col-span-6 space-y-6">
+            <div class="rounded-2xl border border-white/10 bg-slate-900/40 p-6 sm:p-8">
+              <h3 class="font-display text-lg font-bold text-white">Full-Stack Web Development</h3>
+              <p class="mt-2 text-xs text-slate-400 leading-relaxed font-semibold">An intensive bootcamp covering TypeScript, React, Tailwind, and Express. Build complete dynamic database integrations and qualify for premium tech opportunities globally.</p>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-slate-900/40 p-6 sm:p-8">
+              <h3 class="font-display text-lg font-bold text-white">Corporate Microsoft Office Efficiency</h3>
+              <p class="mt-2 text-xs text-slate-400 leading-relaxed font-semibold">Master advanced corporate spreadsheets (Excel macros, complex lookup indexes), high-end Word layout templates, and PowerPoint presentation design.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pipeline Process Section -->
+    <section id="process" class="bg-slate-50 py-24 border-b border-slate-100 text-slate-900">
+      <div class="mx-auto max-w-7xl px-6">
+        <div class="text-center max-w-3xl mx-auto mb-16">
+          <p class="font-mono text-xs font-bold uppercase tracking-wider text-blue-600">The Blueprint</p>
+          <h2 class="mt-2 font-display text-3xl font-extrabold tracking-tight sm:text-4xl">Our Interactive Project Pipeline</h2>
+        </div>
+        <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="relative bg-white rounded-xl p-6 border border-slate-200">
+            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600 mb-4 font-bold">01</div>
+            <h3 class="text-xs font-bold uppercase">Configure</h3>
+            <p class="mt-2 text-[11px] text-slate-500">Configure parameters on our smart client forms.</p>
+          </div>
+          <div class="relative bg-white rounded-xl p-6 border border-slate-200">
+            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600 mb-4 font-bold">02</div>
+            <h3 class="text-xs font-bold uppercase">AI Review</h3>
+            <p class="mt-2 text-[11px] text-slate-500">Inputs scanned against registry database metrics.</p>
+          </div>
+          <div class="relative bg-white rounded-xl p-6 border border-slate-200">
+            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600 mb-4 font-bold">03</div>
+            <h3 class="text-xs font-bold uppercase">Authorize</h3>
+            <p class="mt-2 text-[11px] text-slate-500">Verify your draft invoice or school admission letter.</p>
+          </div>
+          <div class="relative bg-white rounded-xl p-6 border border-slate-200">
+            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600 mb-4 font-bold">04</div>
+            <h3 class="text-xs font-bold uppercase">Fulfill</h3>
+            <p class="mt-2 text-[11px] text-slate-500">Receive certified CAC filing packets or bound booklets.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Footers & Admin Gate -->
+  <footer class="bg-slate-950 text-slate-400 py-16 border-t border-white/5">
+    <div class="mx-auto max-w-7xl px-6">
+      <div class="flex flex-col md:flex-row items-center justify-between text-[11px] text-slate-600 font-semibold gap-4">
+        <div class="flex flex-col sm:flex-row items-center gap-3">
+          <p>© 2026 Vanguard Digital & Tech Hub. All rights reserved.</p>
+          <span class="hidden sm:inline">|</span>
+          <button onclick="promptAdminLogin()" class="hover:text-slate-300 font-mono text-[10px] uppercase tracking-wider flex items-center gap-1 text-slate-700 hover:underline cursor-pointer">
+            <i data-lucide="key" class="h-3 w-3"></i>Access Staff Console
+          </button>
+        </div>
+        <div class="flex items-center gap-1.5 rounded-full bg-slate-900 border border-slate-800/80 px-3.5 py-1 text-[10px]">
+          <i data-lucide="award" class="h-3.5 w-3.5 text-emerald-500"></i>
+          <span class="text-slate-500">Certified Legal & Technical Instructors Network</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Admin Verification Modal Box -->
+  <div id="adminLoginModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
+    <div class="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-xs text-center space-y-4 shadow-2xl">
+      <h3 class="text-xs font-black uppercase text-slate-400">Staff Console Gate</h3>
+      <p class="text-[10px] text-slate-400 font-medium">Please enter the 4-digit code to transform this site into the admin view.</p>
+      <input id="adminCodeInput" type="password" placeholder="e.g. 9999" maxlength="4" class="w-full text-center tracking-widest text-lg font-mono font-bold bg-white/5 border border-white/10 rounded-lg py-2 focus:border-blue-500 outline-none text-white" />
+      <div class="flex gap-2">
+        <button onclick="closeAdminModal()" class="w-1/2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold py-2">Cancel</button>
+        <button onclick="validateAdminCode()" class="w-1/2 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-bold py-2">Unlock</button>
+      </div>
+      <p id="adminModalError" class="hidden text-[10px] text-red-500 font-bold"></p>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    // In-memory Database to mimic localStorage
+    let storedJobs = [
+      {
+        id: "JOB-7701",
+        type: "CAC_REGISTRATION",
+        businessName: "NEXUS INNOVATIONS LTD",
+        entityType: "Private Limited Company (LTD)",
+        industry: "Technology & Software",
+        status: "Pending Verification",
+        timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
+        whatsappMessage: ""
+      },
+      {
+        id: "JOB-4820",
+        type: "PRINT_ORDER",
+        jobType: "Print",
+        fileName: "Corporate_Pitch_Deck.pdf",
+        pages: 32,
+        colorMode: "Color",
+        finishing: "Spiral Binding",
+        instructions: "Double-sided, high-gloss paper",
+        totalCost: 14.70,
+        timestamp: new Date(Date.now() - 1800000).toISOString(),
+        whatsappMessage: ""
+      }
+    ];
+
+    // Phone Configuration
+    let targetPhone = "2348030000000";
+
+    function toggleConfigBanner() {
+      const banner = document.getElementById("phoneConfigBanner");
+      banner.classList.toggle("hidden");
+    }
+
+    function savePhoneConfiguration() {
+      const input = document.getElementById("whatsappPhoneInput");
+      const cleaned = input.value.replace(/\D/g, "");
+      if (cleaned.length < 7) {
+        alert("Please enter a valid WhatsApp phone number with country code.");
+        return;
+      }
+      targetPhone = cleaned;
+      localStorage.setItem("vanguard_whatsapp_phone", targetPhone);
+      toggleConfigBanner();
+      alert(`Success! Targets configured to: +${targetPhone}`);
+    }
+
+    function scrollToSection(id) {
+      const element = document.getElementById(id);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    // CAC AI Name Check Simulation
+    function triggerSimulatedCacCheck() {
+      const name = document.getElementById("proposedNameInput").value;
+      if (!name) {
+        alert("Please proposed name.");
+        return;
+      }
+      document.getElementById("cacInitialState").classList.add("hidden");
+      document.getElementById("cacLoadingState").classList.remove("hidden");
+      
+      setTimeout(() => {
+        document.getElementById("cacLoadingState").classList.add("hidden");
+        document.getElementById("cacReportState").classList.remove("hidden");
+        
+        // Add to db
+        storedJobs.unshift({
+          id: `CAC-${Math.floor(1000 + Math.random() * 9000)}`,
+          type: "CAC_REGISTRATION",
+          businessName: name.toUpperCase(),
+          entityType: document.getElementById("entityTypeInput").value,
+          industry: "Technology Cluster",
+          status: "Eligible for Filing (92%)",
+          timestamp: new Date().toISOString()
+        });
+        renderAdminTable();
+      }, 1200);
+    }
+
+    function submitCacViaWhatsApp() {
+      const name = document.getElementById("proposedNameInput").value;
+      const entity = document.getElementById("entityTypeInput").value;
+      const waText = encodeURIComponent(`*VANGUARD CAC SUBMISSION*\nProposed Name: ${name.toUpperCase()}\nEntity: ${entity}`);
+      window.open(`https://wa.me/${targetPhone}?text=${waText}`, "_blank");
+    }
+
+    // Print quotation
+    let activePrintCategory = "Print";
+    function selectPrintCategory(cat) {
+      activePrintCategory = cat;
+      const btns = ["btnCatPrint", "btnCatScan", "btnCatGraphic", "btnCatTyping"];
+      btns.forEach(b => {
+        const el = document.getElementById(b);
+        el.className = "rounded-xl py-3 text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50";
+      });
+      const activeMap = {
+        "Print": "btnCatPrint",
+        "Scan": "btnCatScan",
+        "Graphic Design": "btnCatGraphic",
+        "Typing Job": "btnCatTyping"
+      };
+      document.getElementById(activeMap[cat]).className = "rounded-xl py-3 text-xs font-bold border border-slate-950 bg-slate-950 text-white transition-all text-center";
+      calculatePrintQuote();
+    }
+
+    function calculatePrintQuote() {
+      const pages = parseInt(document.getElementById("printPagesInput").value) || 1;
+      const qty = parseInt(document.getElementById("printQtyInput").value) || 1;
+      const color = document.getElementById("printColorInput").value;
+      const binding = document.getElementById("printBindingInput").value;
+
+      let rate = 0.08;
+      if (activePrintCategory === "Scan") rate = 0.05;
+      else if (activePrintCategory === "Graphic Design") rate = 15.00;
+      else if (activePrintCategory === "Typing Job") rate = 1.50;
+      else rate = color === "Color" ? 0.35 : 0.08;
+
+      let bindingFee = binding === "Spiral" ? 3.50 : binding === "Hardback" ? 15.00 : 0;
+      const total = (pages * rate + bindingFee) * qty;
+
+      document.getElementById("invoiceSubtotalText").innerText = `$${total.toFixed(2)}`;
+      document.getElementById("invoiceCategoryText").innerText = activePrintCategory;
+      document.getElementById("invoiceScopeText").innerText = `${pages} Pages • ${qty} Copies`;
+      document.getElementById("invoiceFinishingText").innerText = `${color} • ${binding}`;
+    }
+
+    function submitPrintViaWhatsApp() {
+      const total = document.getElementById("invoiceSubtotalText").innerText;
+      const waText = encodeURIComponent(`*VANGUARD PRINT ORDER*\nCategory: ${activePrintCategory}\nTotal: ${total}`);
+      
+      storedJobs.unshift({
+        id: `PRN-${Math.floor(1000 + Math.random() * 9000)}`,
+        type: "PRINT_ORDER",
+        fileName: "Corporate_Documents.pdf",
+        pages: parseInt(document.getElementById("printPagesInput").value) || 1,
+        colorMode: document.getElementById("printColorInput").value,
+        finishing: document.getElementById("printBindingInput").value,
+        totalCost: parseFloat(total.replace('$', '')),
+        timestamp: new Date().toISOString()
+      });
+      renderAdminTable();
+
+      window.open(`https://wa.me/${targetPhone}?text=${waText}`, "_blank");
+    }
+
+    // Student Enrollment
+    function submitEnrollmentViaWhatsApp() {
+      const name = document.getElementById("enrollNameInput").value;
+      const email = document.getElementById("enrollEmailInput").value;
+      const phone = document.getElementById("enrollPhoneInput").value;
+      const course = document.getElementById("enrollCourseInput").value;
+
+      if (!name || !email) {
+        alert("Please input your candidate name and email.");
+        return;
+      }
+
+      storedJobs.unshift({
+        id: `STU-${Math.floor(1000 + Math.random() * 9000)}`,
+        type: "ACADEMY_ENROLLMENT",
+        fullName: name,
+        email,
+        phone,
+        course,
+        timestamp: new Date().toISOString()
+      });
+      renderAdminTable();
+
+      const waText = encodeURIComponent(`*VANGUARD ADMISSION*\nStudent: ${name}\nCourse: ${course}`);
+      window.open(`https://wa.me/${targetPhone}?text=${waText}`, "_blank");
+      alert("Registration submitted! Admissions representative will reach out shortly.");
+    }
+
+    // Cohort intake countdown
+    setInterval(() => {
+      const now = new Date();
+      const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2, 9, 0, 0);
+      const diff = target.getTime() - now.getTime();
+      const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+      const m = Math.floor((diff / (1000 * 60)) % 60);
+      document.getElementById("countdownHoursText").innerText = String(h).padStart(2, '0');
+      document.getElementById("countdownMinsText").innerText = String(m).padStart(2, '0');
+    }, 1000);
+
+    // Admin Authentications
+    function promptAdminLogin() {
+      document.getElementById("adminLoginModal").classList.remove("hidden");
+    }
+
+    function closeAdminModal() {
+      document.getElementById("adminLoginModal").classList.add("hidden");
+    }
+
+    function validateAdminCode() {
+      const val = document.getElementById("adminCodeInput").value;
+      if (val === "9999") {
+        closeAdminModal();
+        authenticateAdmin();
+      } else {
+        const err = document.getElementById("adminModalError");
+        err.classList.remove("hidden");
+        err.innerText = "Invalid credentials.";
+      }
+    }
+
+    function authenticateAdmin() {
+      document.getElementById("clientWorkspace").classList.add("hidden");
+      document.getElementById("adminDashboardSection").classList.remove("hidden");
+      document.getElementById("adminExitBtn").classList.remove("hidden");
+      document.getElementById("navEnrollBtn").classList.add("hidden");
+      renderAdminTable();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function deauthenticateAdmin() {
+      document.getElementById("clientWorkspace").classList.remove("hidden");
+      document.getElementById("adminDashboardSection").classList.add("hidden");
+      document.getElementById("adminExitBtn").classList.add("hidden");
+      document.getElementById("navEnrollBtn").classList.remove("hidden");
+    }
+
+    function purgeOfflineJobs() {
+      storedJobs = [];
+      renderAdminTable();
+    }
+
+    function renderAdminTable() {
+      const tbody = document.getElementById("adminJobsTableBody");
+      tbody.innerHTML = "";
+      
+      let totalJobs = storedJobs.length;
+      let cac = 0, enroll = 0, printRev = 0;
+
+      storedJobs.forEach(job => {
+        let title = "", subtitle = "", details = "";
+        if (job.type === "CAC_REGISTRATION") {
+          cac++;
+          title = job.businessName;
+          subtitle = job.entityType;
+          details = "Filing Priority";
+        } else if (job.type === "PRINT_ORDER") {
+          printRev += job.totalCost || 0;
+          title = job.fileName || "Print order";
+          subtitle = `${job.pages} Pages • ${job.colorMode}`;
+          details = `$${(job.totalCost || 0).toFixed(2)} USD`;
+        } else {
+          enroll++;
+          title = job.fullName;
+          subtitle = job.course;
+          details = "Authorized Enrollment";
+        }
+
+        const tr = document.createElement("tr");
+        tr.className = "border-b border-white/5 hover:bg-white/5";
+        tr.innerHTML = `
+          <td class="p-4 font-mono font-bold text-white">${job.id}</td>
+          <td class="p-4"><span class="bg-blue-500/10 border border-blue-500/20 text-blue-400 font-mono text-[10px] px-2 py-0.5 rounded uppercase font-bold">${job.type.split('_')[0]}</span></td>
+          <td class="p-4">
+            <p class="text-white font-extrabold">${title}</p>
+            <p class="text-slate-400 text-[11px]">${subtitle}</p>
+            <p class="text-blue-400 font-bold font-mono text-[10px] mt-1">${details}</p>
+          </td>
+          <td class="p-4 text-slate-400">${new Date(job.timestamp).toLocaleString()}</td>
+          <td class="p-4"><button onclick="window.open('https://wa.me/${targetPhone}', '_blank')" class="bg-blue-600 px-3 py-1.5 rounded font-bold text-[10px] text-white">Contact Client</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById("totalJobsMetric").innerText = totalJobs;
+      document.getElementById("cacJobsMetric").innerText = cac;
+      document.getElementById("printRevMetric").innerText = `$${printRev.toFixed(2)}`;
+      document.getElementById("enrollJobsMetric").innerText = enroll;
+    }
+
+  </script>
+</body>
+</html>

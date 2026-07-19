@@ -1,0 +1,238 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-brand-navy: #1D1D1F;
+  --color-brand-slate: #8E8E93;
+  --color-brand-light: #F5F5F7;
+  --color-brand-accent: #3A3A3C;
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+@utility shadow-mdx {
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.04), 0 2px 10px rgba(0, 0, 0, 0.01);
+}
+
+@utility glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+@utility mdx-transition {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@utility chrome-btn {
+  background: linear-gradient(135deg, #1D1D1F 0%, #3A3A3C 100%);
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(29, 29, 31, 0.15);
+}
+
+@utility silver-chrome-btn {
+  background: linear-gradient(135deg, #E2E2E7 0%, #FFFFFF 100%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #F5F5F7;
+  color: #1D1D1F;
+  overflow-x: hidden;
+  letter-spacing: -0.011em;
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Custom modern scrollbar for the minimalist aesthetic */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F5F5F7;
+}
+::-webkit-scrollbar-thumb {
+  background: #D1D1D6;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8E8E93;
+}
+
+/* ----------------------------------------------------
+   UNIFORM AND COHESIVE DARK THEME CONFIGURATIONS
+   ---------------------------------------------------- */
+.dark {
+  background-color: #09090b;
+  color: #f4f4f5;
+
+  & body {
+    background-color: #09090b !important;
+    color: #f4f4f5 !important;
+  }
+
+  /* Escape specific hex text color selectors */
+  & .text-\[\#1D1D1F\] {
+    color: #f4f4f5 !important;
+  }
+  & .text-zinc-900 {
+    color: #f4f4f5 !important;
+  }
+  & .text-zinc-800 {
+    color: #e4e4e7 !important;
+  }
+  & .text-zinc-700 {
+    color: #d4d4d8 !important;
+  }
+  & .text-zinc-600 {
+    color: #a1a1aa !important;
+  }
+  & .text-zinc-500 {
+    color: #a1a1aa !important;
+  }
+  & .text-zinc-400 {
+    color: #71717a !important;
+  }
+  & .text-slate-900 {
+    color: #f4f4f5 !important;
+  }
+  & .text-slate-950 {
+    color: #fafafa !important;
+  }
+  & .text-slate-800 {
+    color: #e4e4e7 !important;
+  }
+  & .text-slate-700 {
+    color: #d4d4d8 !important;
+  }
+  & .text-slate-600 {
+    color: #a1a1aa !important;
+  }
+
+  /* Background replacements */
+  & .bg-white {
+    background-color: #18181b !important;
+  }
+  & .bg-zinc-50 {
+    background-color: #121214 !important;
+  }
+  & .bg-slate-50 {
+    background-color: #121214 !important;
+  }
+  & .bg-slate-100 {
+    background-color: #27272a !important;
+  }
+  & .bg-zinc-100 {
+    background-color: #27272a !important;
+  }
+  & .bg-zinc-200 {
+    background-color: #3f3f46 !important;
+  }
+  & .bg-white\/70 {
+    background-color: rgba(24, 24, 27, 0.7) !important;
+  }
+  & .bg-white\/50 {
+    background-color: rgba(24, 24, 27, 0.5) !important;
+  }
+  & .bg-white\/60 {
+    background-color: rgba(24, 24, 27, 0.6) !important;
+  }
+  & .bg-white\/40 {
+    background-color: rgba(39, 39, 42, 0.4) !important;
+  }
+  & .bg-white\/85 {
+    background-color: rgba(24, 24, 27, 0.85) !important;
+  }
+  & .bg-blue-50 {
+    background-color: rgba(30, 58, 138, 0.25) !important;
+  }
+
+  /* Borders */
+  & .border-zinc-200 {
+    border-color: #27272a !important;
+  }
+  & .border-zinc-200\/40 {
+    border-color: rgba(63, 63, 70, 0.3) !important;
+  }
+  & .border-zinc-200\/50 {
+    border-color: rgba(63, 63, 70, 0.4) !important;
+  }
+  & .border-slate-200 {
+    border-color: #27272a !important;
+  }
+  & .border-slate-200\/60 {
+    border-color: rgba(63, 63, 70, 0.4) !important;
+  }
+  & .border-zinc-100 {
+    border-color: #18181b !important;
+  }
+  & .border-slate-100 {
+    border-color: #18181b !important;
+  }
+
+  /* Form Elements for clean look */
+  & input, & textarea, & select {
+    background-color: #121214 !important;
+    color: #fafafa !important;
+    border-color: #27272a !important;
+    
+    &::placeholder {
+      color: #52525b !important;
+    }
+    
+    &:focus {
+      border-color: #52525b !important;
+      outline: none;
+    }
+  }
+
+  /* Interactive items & dropdowns */
+  & option {
+    background-color: #18181b !important;
+    color: #f4f4f5 !important;
+  }
+
+  /* Buttons & Utilities */
+  & .glass-panel {
+    background: rgba(18, 18, 18, 0.75) !important;
+    border-color: rgba(63, 63, 70, 0.5) !important;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.25), 0 2px 10px rgba(0, 0, 0, 0.15) !important;
+  }
+
+  & .silver-chrome-btn {
+    background: linear-gradient(135deg, #27272a 0%, #18181b 100%) !important;
+    border-color: rgba(63, 63, 70, 0.8) !important;
+    color: #f4f4f5 !important;
+    
+    &:hover {
+      background: #3f3f46 !important;
+      border-color: #52525b !important;
+    }
+  }
+
+  & .chrome-btn {
+    background: linear-gradient(135deg, #f4f4f5 0%, #d4d4d8 100%) !important;
+    color: #09090b !important;
+  }
+
+  /* Custom Scrollbar override for Dark Mode */
+  & ::-webkit-scrollbar-track {
+    background: #09090b !important;
+  }
+  & ::-webkit-scrollbar-thumb {
+    background: #27272a !important;
+  }
+  & ::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46 !important;
+  }
+}
