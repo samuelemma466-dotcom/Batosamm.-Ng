@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
-    "start": "node dist/server.cjs",
+    "start": "node -e \"const fs = require('fs'); const cp = require('child_process'); if (!fs.existsSync('dist/server.cjs')) { console.log('Production build not found. Building now...'); cp.execSync('bun run build || npm run build', {stdio: 'inherit'}); }\" && node dist/server.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
