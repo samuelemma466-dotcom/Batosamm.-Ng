@@ -54,7 +54,7 @@ app.post("/api/chat", async (req, res) => {
     const ai = getAiClient();
     if (!ai) {
       return res.json({
-        text: "Hello! I am the Vanguard AI Concierge. It looks like my API key is not fully configured yet, but I can still tell you about Vanguard Digital & Tech Hub! We offer professional CAC business registration, high-quality printing, and tech courses (Web Development & Microsoft Office). How can I assist you with these services today?",
+        text: "Hello! I am your Bato Sam AI Concierge. It looks like my API key is not fully configured yet, but I can still tell you about our digital services. We handle CAC company registration, printing jobs, and courses at Jovibe Code Tech Academy. How can I assist you with these services today?",
       });
     }
 
@@ -69,22 +69,17 @@ app.post("/api/chat", async (req, res) => {
       model: "gemini-3.5-flash",
       contents: formattedContents,
       config: {
-        systemInstruction: `You are the elegant and highly professional 24/7 AI Concierge for Vanguard Digital & Tech Hub.
-Your tone must be premium, trustworthy, welcoming, and precise. Avoid hype or slop. Use clean formatting.
+        systemInstruction: `You are the 'Bato Sam Concierge', the official AI assistant for BATO SAM. NG.
+Your Tone must be Professional, polite, and authoritative.
 
-About Vanguard Digital & Tech Hub:
-- Location: Penthouse Suite, Vanguard Plaza, Tech District.
-- Services Offered:
-  1. Corporate Affairs (CAC) Registration: AI-assisted business registration (Sole Proprietorship, LLC, NGO/Association). We run name availability checks, prepare legal templates, and handle expert filings.
-  2. Digital Print & Document Hub: High-end printing, high-volume documentation, binding, architectural blueprints, corporate stationery. Clients can upload files to calculate custom quotes.
-  3. Tech Academy: Two premium career-accelerator programs:
-     - Web Development Mastery (12 weeks, $450): React, Node.js, Express, Tailwind CSS, TypeScript, and modern engineering workflows.
-     - Microsoft Office Suite Professional (4 weeks, $150): Complete mastery of Word, advanced Excel modeling, PowerPoint presentation design, and Access databases.
+Core Knowledge:
+- Location: Shop 20, Pabe Plaza, Pure Water Bus-Stop, Badagry Expressway, Lagos.
+- Jovibe Code: We teach 7 skills (AI, Vibe Coding, Graphics, CBT, 3D, App Dev, Basic Computing). Tuition is FREE. Certificate is ₦5,500. Installment (₦2,750) is allowed. There is also a maintenance fee of ₦200 per class.
+- CAC Services: Business Name (₦25,000), LTD (₦55,000), NGO (₦75,000). Need NIN, 3 Names, and ID.
+- Printing: We handle project typesetting, bulk printing, and hardcover binding.
 
-When talking about student portal enrollment, explain that they can register in our 'Tech Academy' section on this website, select their course, calculate the dynamic tuition fees, and instantly get a official printable Admission Letter.
-When talking about Print Hub, explain they can drag and drop their PDFs or documents right into our calculator to get an instant quote.
-
-Always answer concisely, maintain high corporate polish, and guide the user to the correct section of our website for interactive features.`,
+Limitations:
+If a user asks a question NOT related to Bato Sam (e.g., 'how to cook rice', 'who is Lionel Messi', general coding or trivia outside Bato Sam digital services), you MUST politely decline and say exactly: 'I am specialized in Bato Sam digital services. How can I help you with your business or training today?'`,
       },
     });
 
@@ -678,6 +673,79 @@ app.get("/api/academy/admission-letter", (req, res) => {
   `;
 
   res.send(letterHtml);
+});
+
+// 6. OAuth Callback route for iframe-compatible popup flow
+app.get(["/auth/callback", "/auth/callback/"], (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Completing Authentication</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          background-color: #0a0a0a;
+          color: #ffffff;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          margin: 0;
+        }
+        .spinner {
+          border: 4px solid rgba(255, 255, 255, 0.1);
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          border-left-color: #ffffff;
+          animation: spin 1s linear infinite;
+          margin-bottom: 20px;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        h2 {
+          font-size: 18px;
+          font-weight: 600;
+          margin: 0 0 8px 0;
+        }
+        p {
+          font-size: 13px;
+          color: #a0a0a0;
+          margin: 0;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="spinner"></div>
+      <h2>Completing authentication</h2>
+      <p>Please wait, synchronizing your session...</p>
+      
+      <script>
+        // Post the authentication payload back to the parent iframe
+        if (window.opener) {
+          window.opener.postMessage({
+            type: 'OAUTH_AUTH_SUCCESS',
+            hash: window.location.hash,
+            search: window.location.search
+          }, '*');
+          
+          // Close after a brief delay to ensure message transmission
+          setTimeout(() => {
+            window.close();
+          }, 800);
+        } else {
+          // Fallback if opened directly
+          window.location.href = '/';
+        }
+      </script>
+    </body>
+    </html>
+  `);
 });
 
 // ==========================================

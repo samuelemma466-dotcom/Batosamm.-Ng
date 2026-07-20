@@ -1,6 +1,6 @@
 // Session helper to handle minimalist glassmorphic client accounts, unique client IDs, and invite tracking.
 
-import { createUserInSupabase, createReferralInSupabase } from "./supabase";
+import { createUserInSupabase, createReferralInSupabase, supabase } from "./supabase";
 
 export interface UserAccount {
   id: string; // Client ID, e.g., BATO-CLI-4921
@@ -20,6 +20,9 @@ export interface UserAccount {
   emergencyName?: string; // Emergency Contact Name
   emergencyPhone?: string; // Emergency Contact Phone
   idVerified?: boolean; // Verification status
+  address?: string; // Postal/physical address
+  bio?: string; // Personal Bio
+  batoPoints?: number; // Spending/Earned Points
 }
 
 export function getStoredUsers(): UserAccount[] {
@@ -188,9 +191,6 @@ export function registerOrLoginGoogleUser(fullName: string, email: string, avata
     localStorage.setItem("bato_sam_registered_users", JSON.stringify(users));
     localStorage.setItem("bato_sam_current_user", JSON.stringify(found));
     
-    // Sync to Supabase in the background
-    createUserInSupabase(found).catch(err => console.warn("Supabase user save bypassed:", err));
-    
     window.dispatchEvent(new Event("bato_user_session_changed"));
     return found;
   }
@@ -216,9 +216,6 @@ export function registerOrLoginGoogleUser(fullName: string, email: string, avata
   users.push(newUser);
   localStorage.setItem("bato_sam_registered_users", JSON.stringify(users));
   localStorage.setItem("bato_sam_current_user", JSON.stringify(newUser));
-  
-  // Sync to Supabase in background
-  createUserInSupabase(newUser).catch(err => console.warn("Supabase user save bypassed:", err));
   
   window.dispatchEvent(new Event("bato_user_session_changed"));
   return newUser;
@@ -265,5 +262,85 @@ export function clearAllUsers() {
     localStorage.removeItem("bato_sam_shares");
     window.dispatchEvent(new Event("bato_user_session_changed"));
   }
+}
+
+export function updateUserRole(userId: string, newRole: "client" | "staff" | "admin"): UserAccount | null {
+  const users = getStoredUsers();
+  let updatedUser: UserAccount | null = null;
+  const updatedList = users.map(u => {
+    if (u.id === userId) {
+      updatedUser = { ...u, role: newRole };
+      return updatedUser;
+    }
+    return u;
+  });
+  if (updatedUser) {
+    localStorage.setItem("bato_sam_registered_users", JSON.stringify(updatedList));
+    const current = getCurrentUser();
+    if (current && current.id === userId) {
+      localStorage.setItem("bato_sam_current_user", JSON.stringify(updatedUser));
+    }
+    // Sync to Supabase in the background
+    createUserInSupabase(updatedUser).catch(err => console.warn("Supabase user save bypassed:", err));
+    window.dispatchEvent(new Event("bato_user_session_changed"));
+  }
+  return updatedUser;
+}
+
+export async function syncUserProfileFromSupabase(email: string): Promise<UserAccount | null> {
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+    
+    // Query profiles table
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("email", cleanEmail)
+      .maybeSingle();
+
+    if (error) {
+      console.warn("Could not auto-fetch user from Supabase 'profiles':", error);
+      return null;
+    }
+
+    if (profile) {
+      // Map database fields to UserAccount
+      const currentUser = getCurrentUser();
+      const users = getStoredUsers();
+      
+      const mappedUser: UserAccount = {
+        id: profile.id || currentUser?.id || `BATO-CLI-${Math.floor(1000 + Math.random() * 9000)}`,
+        fullName: profile.full_name || profile.fullName || currentUser?.fullName || "",
+        email: cleanEmail,
+        phone: profile.phone || currentUser?.phone || "Google Auth",
+        studentId: profile.student_id || profile.studentId || currentUser?.studentId,
+        inviteCode: profile.invite_code || profile.inviteCode || currentUser?.inviteCode || `BATO-INV-${Math.floor(1000 + Math.random() * 9000)}`,
+        referralCount: profile.referral_count || profile.referralCount || currentUser?.referralCount || 0,
+        referredEmails: currentUser?.referredEmails || [],
+        avatarUrl: profile.avatar_url || profile.avatarUrl || currentUser?.avatarUrl,
+        isGoogleUser: profile.is_google_user || profile.isGoogleUser || currentUser?.isGoogleUser || true,
+        role: profile.role || currentUser?.role || "client",
+        idType: profile.id_type || profile.idType || currentUser?.idType,
+        idNumber: profile.id_number || profile.idNumber || currentUser?.idNumber,
+        address: profile.address || currentUser?.address || "",
+        bio: profile.bio || currentUser?.bio || ""
+      };
+
+      // Save to localStorage
+      localStorage.setItem("bato_sam_current_user", JSON.stringify(mappedUser));
+      
+      const updatedList = users.map(u => u.email.trim().toLowerCase() === cleanEmail ? mappedUser : u);
+      if (!users.some(u => u.email.trim().toLowerCase() === cleanEmail)) {
+        updatedList.push(mappedUser);
+      }
+      localStorage.setItem("bato_sam_registered_users", JSON.stringify(updatedList));
+
+      window.dispatchEvent(new Event("bato_user_session_changed"));
+      return mappedUser;
+    }
+  } catch (err) {
+    console.error("Error auto-fetching user profile from Supabase:", err);
+  }
+  return null;
 }
 

@@ -198,7 +198,47 @@ export default function CACAssistant({ prefilledName, onClearPrefilled }: CACAss
       setStep(3);
       if (onClearPrefilled) onClearPrefilled();
     }
-  }, [prefilledName]);
+    
+    // Auto-fill applicant fields from profile
+    try {
+      const rawUser = localStorage.getItem("bato_sam_current_user");
+      if (rawUser) {
+        const u = JSON.parse(rawUser);
+        if (u) {
+          if (u.email && !applicantEmail) {
+            setApplicantEmail(u.email);
+          }
+          if (u.phone && u.phone !== "Google Auth" && !applicantPhone) {
+            setApplicantPhone(u.phone);
+          }
+          if (u.fullName) {
+            const parts = u.fullName.trim().split(/\s+/);
+            if (parts.length > 0 && !firstName) {
+              setFirstName(parts[0]);
+            }
+            if (parts.length > 1 && !surname) {
+              setSurname(parts.slice(1).join(" "));
+            }
+          }
+          if (u.address) {
+            if (!homeStreet) {
+              setHomeStreet(u.address);
+            }
+            const addrParts = u.address.split(",");
+            if (addrParts.length > 1) {
+              if (!homeCity) setHomeCity(addrParts[addrParts.length - 2].trim());
+              if (!homeState) setHomeState(addrParts[addrParts.length - 1].trim());
+            } else {
+              if (!homeCity) setHomeCity("Badagry");
+              if (!homeState) setHomeState("Lagos");
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to auto-fill CAC applicant bio from profile:", err);
+    }
+  }, [prefilledName, viewMode]);
 
   const stepsInfo = [
     { num: 1, name: "Applicant Bio" },

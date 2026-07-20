@@ -54,6 +54,29 @@ export default function PrintHub() {
     };
   }, []);
 
+  // Auto-fill customer details from user profile
+  useEffect(() => {
+    try {
+      const rawUser = localStorage.getItem("bato_sam_current_user");
+      if (rawUser) {
+        const u = JSON.parse(rawUser);
+        if (u) {
+          if (u.fullName && !customerName) {
+            setCustomerName(u.fullName);
+          }
+          if (u.email && !customerEmail) {
+            setCustomerEmail(u.email);
+          }
+          if (u.address && !deliveryAddress) {
+            setDeliveryAddress(u.address);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to auto-fill customer details from profile:", err);
+    }
+  }, []);
+
   // Maintenance Mode Simulated State
   const [maintenanceMode, setMaintenanceMode] = useState(false);
 

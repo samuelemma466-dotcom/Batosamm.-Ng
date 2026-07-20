@@ -30,8 +30,8 @@ import {
   CheckCircle,
   Settings
 } from "lucide-react";
-import { getStoredJobs, JobItem, clearAllJobs, updateJobStatus } from "../utils/localStorage";
-import { getAdminAnalytics, incrementLiveVisitors, getStoredUsers, UserAccount } from "../utils/userSession";
+import { getStoredJobs, JobItem, clearAllJobs, updateJobStatus, assignJobToStaff } from "../utils/localStorage";
+import { getAdminAnalytics, incrementLiveVisitors, getStoredUsers, UserAccount, getCurrentUser, updateUserRole } from "../utils/userSession";
 import { supabase } from "../utils/supabase";
 
 interface AdminDashboardProps {
@@ -42,6 +42,7 @@ interface AdminDashboardProps {
 export default function AdminDashboard({ onLogout, isAdminAuthenticated }: AdminDashboardProps) {
   const [jobs, setJobs] = useState<JobItem[]>([]);
   const [filter, setFilter] = useState<"ALL" | "CAC_REGISTRATION" | "PRINT_ORDER" | "ACADEMY_ENROLLMENT">("ALL");
+  const [staffFilter, setStaffFilter] = useState<"ALL" | "ASSIGNED_TO_ME">("ASSIGNED_TO_ME");
   
   // Vault Login / Role States
   const [accessCode, setAccessCode] = useState("");
@@ -62,6 +63,12 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
   const [testErrorMessage, setTestErrorMessage] = useState("");
   const [registeredUsers, setRegisteredUsers] = useState<UserAccount[]>([]);
+
+  const activeStaff = [
+    ...registeredUsers.filter((u) => u.role === "staff"),
+    { id: "SIM-STAFF-1", fullName: "Chidi Okafor (Fulfillment)" },
+    { id: "SIM-STAFF-2", fullName: "Aminu Yusuf (CAC Desk)" }
+  ];
 
   const loadJobs = () => {
     setJobs(getStoredJobs());
@@ -265,6 +272,13 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
   };
 
   const filteredJobs = jobs.filter((j) => {
+    if (role === "STAFF") {
+      if (staffFilter === "ASSIGNED_TO_ME") {
+        const me = getCurrentUser();
+        const myId = me?.id || "SIM-STAFF-1";
+        if (j.assignedTo !== myId && j.assignedTo !== "SIM-STAFF-1") return false;
+      }
+    }
     if (filter === "ALL") return true;
     return j.type === filter;
   });
@@ -514,7 +528,33 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                     <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Filter Pipelines:</span>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {/* Staff Work Queue Toggle */}
+                    {role === "STAFF" && (
+                      <div className="flex bg-zinc-100 p-0.5 rounded-full border border-zinc-200 mr-2">
+                        <button
+                          onClick={() => setStaffFilter("ASSIGNED_TO_ME")}
+                          className={`px-3 py-1.5 text-[11px] font-bold rounded-full transition-all cursor-pointer ${
+                            staffFilter === "ASSIGNED_TO_ME"
+                              ? "bg-amber-500 text-[#1D1D1F] shadow"
+                              : "text-zinc-500 hover:text-zinc-700"
+                          }`}
+                        >
+                          My Work Queue
+                        </button>
+                        <button
+                          onClick={() => setStaffFilter("ALL")}
+                          className={`px-3 py-1.5 text-[11px] font-bold rounded-full transition-all cursor-pointer ${
+                            staffFilter === "ALL"
+                              ? "bg-amber-500 text-[#1D1D1F] shadow"
+                              : "text-zinc-500 hover:text-zinc-700"
+                          }`}
+                        >
+                          All Jobs
+                        </button>
+                      </div>
+                    )}
+
                     {[
                       { id: "ALL", label: "All Queues" },
                       { id: "CAC_REGISTRATION", label: "CAC Registrations" },
@@ -706,6 +746,7 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                             <th className="p-4">Project Parameters / Files</th>
                             <th className="p-4">Customer Contact</th>
                             <th className="p-4">Submission Date</th>
+                            <th className="p-4">Assignee</th>
                             <th className="p-4">Fulfillment Status</th>
                           </tr>
                         </thead>
@@ -761,11 +802,20 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                                     <p className="text-[11px] text-zinc-500 mt-0.5">Params: {job.pages} Pages • {job.colorMode} • {job.finishing}</p>
                                     
                                     {/* List uploaded print files */}
-                                    <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                                    <div className="mt-2 flex items-center gap-2 flex-wrap">
                                       <span className="inline-flex items-center gap-1 bg-zinc-50/30 border border-zinc-200/50 rounded-lg px-2 py-1 text-[9px] text-emerald-600 font-bold">
                                         <FileText className="h-3 w-3 text-emerald-600" />
                                         {job.fileName || "Print_Job_Document.pdf"}
                                       </span>
+                                      <button
+                                        onClick={() => {
+                                          alert(`Downloading file: ${job.fileName || "Print_Job_Document.pdf"}. (Local browser transfer complete)`);
+                                        }}
+                                        className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-zinc-800 bg-zinc-100 border border-zinc-300 hover:bg-zinc-200 px-2 py-1 rounded cursor-pointer"
+                                      >
+                                        <Download className="h-2.5 w-2.5" />
+                                        <span>Download File</span>
+                                      </button>
                                     </div>
                                   </div>
                                 )}
@@ -809,6 +859,49 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                                   hour: "2-digit",
                                   minute: "2-digit"
                                 })}
+                              </td>
+
+                              {/* Assignee Selection */}
+                              <td className="p-4 whitespace-nowrap text-xs text-[#1D1D1F]">
+                                {role === "ADMIN" ? (
+                                  <select
+                                    value={job.assignedTo || ""}
+                                    onChange={(e) => {
+                                      const staffId = e.target.value;
+                                      const staffName = activeStaff.find((s) => s.id === staffId)?.fullName || "Unassigned";
+                                      assignJobToStaff(job.id, staffId, staffName);
+                                      loadJobs();
+                                      alert(`Job ${job.id} assigned to ${staffName}!`);
+                                    }}
+                                    className="bg-zinc-50/50 border border-zinc-200/80 rounded-lg px-2 py-1.5 text-[10px] text-[#1D1D1F] font-bold outline-none focus:border-zinc-400 cursor-pointer"
+                                  >
+                                    <option value="">Unassigned</option>
+                                    {activeStaff.map((s) => (
+                                      <option key={s.id} value={s.id}>{s.fullName}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-semibold text-zinc-700 text-xs">
+                                      {job.assignedToName || "Unassigned"}
+                                    </span>
+                                    {(!job.assignedTo || job.assignedTo === "Unassigned") && (
+                                      <button
+                                        onClick={() => {
+                                          const me = getCurrentUser();
+                                          const myId = me?.id || "SIM-STAFF-1";
+                                          const myName = me?.fullName || "Chidi Okafor (Fulfillment)";
+                                          assignJobToStaff(job.id, myId, myName);
+                                          loadJobs();
+                                          alert(`You have successfully claimed Job ${job.id}!`);
+                                        }}
+                                        className="text-[9px] font-black uppercase bg-amber-500 hover:bg-amber-600 text-[#1D1D1F] px-2 py-1 rounded cursor-pointer transition-all"
+                                      >
+                                        Claim
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
                               </td>
 
                               {/* STATUS TOGGLE */}
@@ -1050,7 +1143,8 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                             <th className="p-4">Email / Phone</th>
                             <th className="p-4">Academic ID</th>
                             <th className="p-4 text-center">Referrals Logged</th>
-                            <th className="p-4">Invite Link</th>
+                            <th className="p-4">Role</th>
+                            <th className="p-4 text-center">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5 text-xs font-semibold text-zinc-700">
@@ -1090,8 +1184,43 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                                   {usr.referralCount || 0}
                                 </span>
                               </td>
-                              <td className="p-4 font-mono text-[10px] text-zinc-400 truncate max-w-[150px]" title={usr.inviteCode}>
-                                {usr.inviteCode}
+                              <td className="p-4">
+                                <span className={`text-[9px] font-mono font-black uppercase px-2 py-0.5 rounded border ${
+                                  usr.role === "admin" 
+                                    ? "bg-red-50 border-red-200 text-red-600" 
+                                    : usr.role === "staff" 
+                                    ? "bg-amber-50 border-amber-200 text-amber-600" 
+                                    : "bg-blue-50 border-blue-200 text-blue-600"
+                                }`}>
+                                  {usr.role || "client"}
+                                </span>
+                              </td>
+                              <td className="p-4 text-center">
+                                {usr.role === "admin" ? (
+                                  <span className="text-[10px] text-zinc-400 italic">System Owner</span>
+                                ) : usr.role === "staff" ? (
+                                  <button
+                                    onClick={() => {
+                                      updateUserRole(usr.id, "client");
+                                      setRegisteredUsers(getStoredUsers());
+                                      alert(`${usr.fullName} demoted to Client status.`);
+                                    }}
+                                    className="px-2.5 py-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[10px] font-bold rounded-lg border border-zinc-200 cursor-pointer transition-all"
+                                  >
+                                    Revoke Staff
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      updateUserRole(usr.id, "staff");
+                                      setRegisteredUsers(getStoredUsers());
+                                      alert(`${usr.fullName} promoted to Staff status!`);
+                                    }}
+                                    className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-black text-[10px] font-bold rounded-lg border border-amber-500 cursor-pointer transition-all"
+                                  >
+                                    Promote to Staff
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           ))}

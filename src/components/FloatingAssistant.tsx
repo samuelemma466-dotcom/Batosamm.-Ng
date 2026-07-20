@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { MessageSquare, X, Send, Sparkles, Loader2, Volume2, VolumeX, Mic, MicOff } from "lucide-react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getCurrentUser } from "../utils/userSession";
 
 export default function FloatingAssistant() {
   const [isOpen, setIsOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([
     {
       sender: "bot",
@@ -22,6 +24,21 @@ export default function FloatingAssistant() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [dragBounds, setDragBounds] = useState({ left: -800, right: 0, top: -600, bottom: 0 });
   const voiceGreetingPlayed = useRef(false);
+  const recognitionRef = useRef<any>(null);
+
+  // Stop any active recognition and speech when component unmounts
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {}
+      }
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   const quickPrompts = [
     "Tell me about Tech Academy courses",
@@ -42,6 +59,46 @@ export default function FloatingAssistant() {
     updateBounds();
     window.addEventListener("resize", updateBounds);
     return () => window.removeEventListener("resize", updateBounds);
+  }, []);
+
+  // Sync user state and personalize greeting
+  useEffect(() => {
+    const updateUser = () => {
+      const u = getCurrentUser();
+      setCurrentUser(u);
+      if (u) {
+        // Calculate dynamic profile completion percentage
+        let score = 0;
+        if (u.fullName?.trim()) score += 25;
+        if (u.phone && u.phone.trim() !== "" && u.phone !== "Google Auth") score += 25;
+        if (u.address?.trim()) score += 30;
+        if (u.bio?.trim()) score += 20;
+
+        let greetingText = "";
+        if (score < 100) {
+          greetingText = `Hey ${u.fullName.split(" ")[0]}, your profile is only ${score}% complete. Add your address for faster checkout.`;
+        } else {
+          greetingText = `Welcome back, ${u.fullName}. Your profile is 100% complete! Your secure administrative functions are fully active and synced.`;
+        }
+
+        setMessages([
+          {
+            sender: "bot",
+            text: greetingText,
+          },
+        ]);
+      } else {
+        setMessages([
+          {
+            sender: "bot",
+            text: "Hello! I am your Bato Sam AI Concierge. I am available 24/7 to guide you with CAC company formation, digital document prints, or Tech Academy course enrollments. How can I assist you today?",
+          },
+        ]);
+      }
+    };
+    updateUser();
+    window.addEventListener("bato_user_session_changed", updateUser);
+    return () => window.removeEventListener("bato_user_session_changed", updateUser);
   }, []);
 
   // Load API Key and preferences on mount and when opened
@@ -109,7 +166,14 @@ export default function FloatingAssistant() {
     if (isMuted || !("speechSynthesis" in window)) return;
     try {
       window.speechSynthesis.cancel(); // Stop current speech
-      const utterance = new SpeechSynthesisUtterance(text);
+      
+      // Clean markdown symbols for cleaner TTS and limit duration
+      const cleanText = text
+        .replace(/[*#_`~]/g, "") // Remove bold, italic, list markers, and other markdown symbols
+        .replace(/\[(.*?)\]\(.*?\)/g, "$1") // Simplify link labels
+        .substring(0, 300); // Concisely read out first 300 characters
+        
+      const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.rate = 1.0;
       utterance.pitch = 1.05;
       
@@ -147,11 +211,16 @@ export default function FloatingAssistant() {
         const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash" });
 
         const systemInstruction = 
-          "You are the Bato Sam Concierge, expert in CAC, Printing, and Tech Training (Jovibe Code AI Concierge, sponsored by BATOSAM NIG.). " +
-          "Guide the user regarding CAC company registration, professional document printing specifications, and the Jovibe Code Academy. " +
-          "Highlight that Tuition is 100% FREE for all 7 skills: AI Prompt Engineering, Vibe Coding, Graphic Design, CBT Practice, 3D Product Design, Coding/App Development, and Basic Computing. " +
-          "Explain that there is a certificate fee of ₦5,500 (installment payments of ₦2,750 are allowed) and a maintenance fee of ₦200 per class. " +
-          "Maintain a highly competent, professional corporate Nigerian tone. Keep responses helpful and readable.";
+          "You are the 'Bato Sam Concierge', the official AI assistant for BATO SAM. NG.\n" +
+          "Your Tone must be Professional, polite, and authoritative.\n\n" +
+          "Core Knowledge:\n" +
+          "- Location: Shop 20, Pabe Plaza, Pure Water Bus-Stop, Badagry Expressway, Lagos.\n" +
+          "- Jovibe Code: We teach 7 skills (AI, Vibe Coding, Graphics, CBT, 3D, App Dev, Basic Computing). Tuition is FREE. Certificate is ₦5,500. Installment (₦2,750) is allowed. There is also a maintenance fee of ₦200 per class.\n" +
+          "- CAC Services: Business Name (₦25,000), LTD (₦55,000), NGO (₦75,000). Need NIN, 3 Names, and ID.\n" +
+          "- Printing: We handle project typesetting, bulk printing, and hardcover binding.\n\n" +
+          "Limitations:\n" +
+          "If a user asks a question NOT related to Bato Sam (e.g., 'how to cook rice', 'who is Lionel Messi', general coding or trivia outside Bato Sam digital services), you MUST politely decline and say exactly: " +
+          "'I am specialized in Bato Sam digital services. How can I help you with your business or training today?'";
 
         // Convert messages history (excluding the first bot intro message)
         const historyParts = messages.slice(1).map((m) => ({
@@ -220,13 +289,19 @@ export default function FloatingAssistant() {
       return;
     }
 
-    if (isListening) {
+    if (isListening && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (err) {
+        console.warn("Error stopping voice recognition:", err);
+      }
       setIsListening(false);
       return;
     }
 
     try {
       const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
       recognition.continuous = false;
       recognition.lang = "en-NG"; // Supports Nigerian accent inflections elegantly
       recognition.interimResults = false;
@@ -237,7 +312,7 @@ export default function FloatingAssistant() {
       };
 
       recognition.onresult = (event: any) => {
-        const speechToText = event.results[0][0].transcript;
+        const speechToText = event.results[0][0]?.transcript;
         if (speechToText && speechToText.trim()) {
           setInputValue(speechToText);
           handleSendMessage(speechToText);
@@ -247,16 +322,38 @@ export default function FloatingAssistant() {
       recognition.onerror = (event: any) => {
         console.error("Speech Recognition Error:", event.error);
         setIsListening(false);
+        if (event.error === "not-allowed") {
+          // Provide friendly user feedback inside the chat context or alert
+          const warningMessage = "Microphone access is blocked. Please allow microphone permissions in your browser address bar or click the 'Open in New Tab' icon to run with full microphone permissions.";
+          setMessages(prev => [
+            ...prev,
+            {
+              sender: "bot",
+              text: `⚠️ **Microphone Blocked**: ${warningMessage}`
+            }
+          ]);
+          speakText("Microphone access is blocked. Please enable it in your browser settings.");
+        } else {
+          setMessages(prev => [
+            ...prev,
+            {
+              sender: "bot",
+              text: `⚠️ **Voice Error**: Failed to capture speech (${event.error}). Please try again.`
+            }
+          ]);
+        }
       };
 
       recognition.onend = () => {
         setIsListening(false);
+        recognitionRef.current = null;
       };
 
       recognition.start();
     } catch (err) {
       console.error("Failed to initialize speech recognition:", err);
       setIsListening(false);
+      recognitionRef.current = null;
     }
   };
 
@@ -289,13 +386,18 @@ export default function FloatingAssistant() {
 
             {/* Controls */}
             <div className="flex items-center gap-2">
-              {/* TTS Mute/Unmute Toggle */}
+              {/* TTS Mute/Unmute Toggle with High Contrast Badge */}
               <button
                 onClick={toggleMute}
-                title={isMuted ? "Unmute Voice" : "Mute Voice"}
-                className="rounded-md p-1.5 text-zinc-500 hover:text-black hover:bg-zinc-100 transition-colors cursor-pointer"
+                title={isMuted ? "Unmute AI Voice" : "Mute AI Voice"}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
+                  isMuted 
+                    ? "bg-zinc-100 text-zinc-400 border-zinc-200 hover:bg-zinc-200" 
+                    : "bg-zinc-950 text-white border-zinc-950 hover:bg-zinc-800 shadow-xs"
+                }`}
               >
-                {isMuted ? <VolumeX className="h-4 w-4 text-zinc-400" /> : <Volume2 className="h-4 w-4 text-black" />}
+                {isMuted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3 animate-pulse text-emerald-400" />}
+                <span>{isMuted ? "MUTED" : "VOICE ON"}</span>
               </button>
 
               {/* Close Panel */}
@@ -329,9 +431,16 @@ export default function FloatingAssistant() {
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="flex items-center gap-2 rounded-md bg-white px-4 py-3 text-xs font-medium border border-zinc-200 shadow-2xs text-zinc-600">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-black" />
-                    <span>AI Engine is thinking...</span>
+                  <div className="flex flex-col gap-1.5 rounded-md bg-white px-4 py-3 text-xs font-medium border border-zinc-200 shadow-2xs text-zinc-600 rounded-tl-none max-w-[80%]">
+                    <div className="flex items-center gap-1.5 text-zinc-500 font-mono text-[9px] uppercase tracking-wider">
+                      <Sparkles className="h-3 w-3 animate-pulse text-zinc-800" />
+                      <span>Bato Sam AI is thinking</span>
+                    </div>
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-zinc-900 animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="h-1.5 w-1.5 rounded-full bg-zinc-900 animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="h-1.5 w-1.5 rounded-full bg-zinc-900 animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
                   </div>
                 </div>
               )}
@@ -391,41 +500,65 @@ export default function FloatingAssistant() {
         </div>
       )}
 
-      {/* Holographic Glowing AI Orb Launcher */}
+      {/* Holographic Glowing AI Orb Launcher - Minimalist Noir Design with Red Listening pulse */}
       <div className="flex justify-end select-none">
         <div className="relative">
           {/* External Pulsating Ripple Ring */}
           <div
             className={`absolute -inset-4 rounded-full blur-lg animate-ping pointer-events-none transition-all duration-500 ${
-              isError ? "bg-red-600/20" : isListening ? "bg-zinc-400/20" : loading ? "bg-zinc-300/15" : "bg-white/30"
+              isError ? "bg-red-600/30" : isListening ? "bg-red-500/50" : loading ? "bg-zinc-800/15" : "bg-zinc-950/20"
             }`}
-            style={{ animationDuration: isError ? "1s" : isListening ? "1.5s" : "4s" }}
+            style={{ animationDuration: isError ? "1s" : isListening ? "1s" : "4s" }}
           />
           {/* Ambient Inner Halo */}
           <div
             className={`absolute -inset-2 rounded-full blur-md animate-pulse pointer-events-none transition-all duration-500 ${
-              isError ? "bg-red-500/25" : isListening ? "bg-zinc-500/15" : loading ? "bg-zinc-400/10" : "bg-zinc-300/10"
+              isError ? "bg-red-500/35" : isListening ? "bg-red-500/40" : loading ? "bg-zinc-800/10" : "bg-zinc-950/10"
             }`}
           />
 
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-white via-zinc-100 to-zinc-350 text-zinc-900 border border-white/80 transition-all duration-500 focus:outline-none cursor-grab shadow-[0_20px_40px_rgba(0,0,0,0.08),inset_0_4px_10px_rgba(255,255,255,1),inset_0_-4px_10px_rgba(0,0,0,0.05)] hover:scale-105 active:scale-95 overflow-hidden"
-          >
-            {/* Liquid drop glare highlights */}
-            <span className="absolute top-1.5 left-3 w-5 h-3 bg-white/80 rounded-full blur-[0.5px] rotate-[-15deg] pointer-events-none" />
-            <span className="absolute bottom-2 right-3 w-2.5 h-2.5 bg-white/35 rounded-full blur-[1px] pointer-events-none" />
-            <span className="absolute inset-2 rounded-full bg-gradient-to-tl from-zinc-300/30 via-white/40 to-transparent pointer-events-none" />
+          <div className="relative flex items-center justify-center">
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className={`relative flex h-16 w-16 items-center justify-center rounded-full text-zinc-100 border transition-all duration-500 focus:outline-none cursor-pointer shadow-2xl overflow-hidden ${
+                isListening 
+                  ? "bg-zinc-900 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5),inset_0_1px_2px_rgba(255,255,255,0.1)] scale-105" 
+                  : "bg-zinc-950 border-zinc-800 hover:border-zinc-700 shadow-[0_10px_30px_rgba(0,0,0,0.6),inset_0_1px_2px_rgba(255,255,255,0.1)] hover:scale-105 active:scale-95"
+              }`}
+            >
+              {/* Liquid drop dark glare highlights */}
+              <span className="absolute top-1.5 left-3 w-4 h-2 bg-white/10 rounded-full blur-[0.5px] rotate-[-15deg] pointer-events-none" />
+              <span className="absolute inset-0 rounded-full bg-gradient-to-tr from-zinc-900/40 via-transparent to-transparent pointer-events-none" />
 
-            {/* Center Core */}
-            <span className="relative z-10 flex items-center justify-center text-zinc-800">
-              {isOpen ? (
-                <X className="h-5 w-5 transition-transform duration-300" />
-              ) : (
-                <Sparkles className="h-5 w-5 animate-pulse text-zinc-800" />
-              )}
-            </span>
-          </button>
+              {/* Center Core */}
+              <span className="relative z-10 flex items-center justify-center">
+                {isOpen ? (
+                  <X className="h-5 w-5 transition-transform duration-300 text-zinc-200" />
+                ) : (
+                  <Sparkles className={`h-5 w-5 transition-colors ${isListening ? "text-red-400 animate-pulse" : "text-zinc-300 animate-pulse"}`} />
+                )}
+              </span>
+            </button>
+
+            {/* Nested Clickable 'Mic' Icon inside the Orb area (only displayed when chat is closed) */}
+            {!isOpen && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation(); // Avoid triggering open/close click on the main Orb
+                  toggleListening();
+                }}
+                className={`absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border shadow-md transition-all duration-300 hover:scale-115 active:scale-90 cursor-pointer ${
+                  isListening
+                    ? "bg-red-600 text-white border-red-500 animate-pulse"
+                    : "bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800 hover:text-white"
+                }`}
+                title={isListening ? "Listening... click to stop" : "Voice Command (Speak to AI)"}
+              >
+                <Mic className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>

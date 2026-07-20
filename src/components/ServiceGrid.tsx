@@ -34,7 +34,7 @@ export default function ServiceGrid({ onSelectService }: ServiceGridProps) {
   ];
 
   return (
-    <section id="services" className="py-32 relative overflow-hidden">
+    <section id="what-we-do" className="py-32 relative overflow-hidden">
       {/* Subtle backing circles */}
       <div className="absolute top-1/2 left-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-zinc-200/40 blur-3xl pointer-events-none" />
       <div className="absolute inset-0 z-0 bg-[radial-gradient(#e5e5e7_1px,transparent_1px)] [background-size:32px_32px] opacity-40 pointer-events-none" />

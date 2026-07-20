@@ -12,6 +12,8 @@ export interface CACJob {
   paymentRef?: string;
   totalCost?: number;
   cacData?: string;
+  assignedTo?: string;
+  assignedToName?: string;
 }
 
 export interface PrintJob {
@@ -28,6 +30,8 @@ export interface PrintJob {
   timestamp: string;
   whatsappMessage: string;
   paymentRef?: string;
+  assignedTo?: string;
+  assignedToName?: string;
 }
 
 export interface EnrollmentJob {
@@ -44,6 +48,8 @@ export interface EnrollmentJob {
   whatsappMessage: string;
   paymentRef?: string;
   totalCost?: number;
+  assignedTo?: string;
+  assignedToName?: string;
 
   // Additional 5-step admissions wizard fields
   dob?: string;
@@ -64,6 +70,15 @@ export type JobItem = CACJob | PrintJob | EnrollmentJob;
 export function updateJobStatus(id: string, status: string) {
   const current = getStoredJobs();
   const updated = current.map((job) => (job.id === id ? { ...job, status } : job));
+  localStorage.setItem("vanguard_pending_jobs", JSON.stringify(updated));
+  
+  // Trigger a custom event to notify components of the status change
+  window.dispatchEvent(new Event("vanguard_jobs_updated"));
+}
+
+export function assignJobToStaff(jobId: string, staffId: string, staffName: string) {
+  const current = getStoredJobs();
+  const updated = current.map((job) => (job.id === jobId ? { ...job, assignedTo: staffId, assignedToName: staffName } : job));
   localStorage.setItem("vanguard_pending_jobs", JSON.stringify(updated));
   
   // Trigger a custom event to notify components of the status change

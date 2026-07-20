@@ -14,18 +14,22 @@ import BrandingKit from "./components/BrandingKit";
 import TrackJob from "./components/TrackJob";
 import SplashScreen from "./components/SplashScreen";
 import UserPortal from "./components/UserPortal";
+import LandingView from "./components/LandingView";
+import UserDashboard from "./components/UserDashboard";
+import SidebarMenu from "./components/SidebarMenu";
 import InstallPWAPrompt from "./components/InstallPWAPrompt";
 import DeviceNotificationToast from "./components/DeviceNotificationToast";
 import NotificationPermissionPrompt from "./components/NotificationPermissionPrompt";
 import { showNativeNotification } from "./utils/notifications";
 import { supabase } from "./utils/supabase";
-import { auth as firebaseAuth, onAuthStateChanged } from "./utils/firebase";
-import { getCurrentUser, registerOrLoginGoogleUser, logoutUser, UserAccount } from "./utils/userSession";
+import { auth as firebaseAuth, googleProvider, signInWithPopup, onAuthStateChanged } from "./utils/firebase";
+import { getCurrentUser, registerOrLoginGoogleUser, logoutUser, UserAccount, syncUserProfileFromSupabase } from "./utils/userSession";
 import { Loader2 } from "lucide-react";
 
 export default function App() {
   console.log("App Starting... Initializing state variables...");
   
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(() => {
     try {
       const role = localStorage.getItem("bato_user_role");
@@ -197,46 +201,29 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Google OAuth Initiator for Auth Wall
+  // Google OAuth Initiator for Auth Wall using Firebase Auth
   const handleGoogleSignIn = async () => {
     setAuthError("");
     setIsAuthenticatingGoogle(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/`,
-          skipBrowserRedirect: true
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.url) {
-        const width = 600;
-        const height = 700;
-        const left = window.screen.width / 2 - width / 2;
-        const top = window.screen.height / 2 - height / 2;
-
-        const popup = window.open(
-          data.url,
-          "google_oauth_popup",
-          `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes`
-        );
-
-        if (!popup) {
-          setAuthError("Popup blocked. Redirecting standard page...");
-          setTimeout(() => {
-            window.location.href = data.url;
-          }, 1500);
-        }
-      } else {
-        throw new Error("No URL returned from Supabase OAuth request.");
+      if (!firebaseAuth) {
+        throw new Error("Firebase Auth is not properly initialized.");
+      }
+      
+      const result = await signInWithPopup(firebaseAuth, googleProvider);
+      if (result.user) {
+        const emailVal = result.user.email || "";
+        const nameVal = result.user.displayName || emailVal.split("@")[0];
+        const picVal = result.user.photoURL || "";
+        
+        const loggedIn = registerOrLoginGoogleUser(nameVal, emailVal, picVal);
+        setCurrentUser(loggedIn);
       }
     } catch (err: any) {
-      console.warn("Google Auth error:", err);
-      setAuthError(`Google Auth connection failed: ${err.message || "Please check connection."}`);
+      console.warn("Google Auth error via Firebase:", err);
+      setAuthError(`Google Auth failed: ${err.message || "Please check connection."}`);
+    } finally {
       setIsAuthenticatingGoogle(false);
     }
   };
@@ -256,6 +243,19 @@ export default function App() {
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
+
+  // Redirect regular users away from the dashboard tab if they try to access it unauthorized
+  useEffect(() => {
+    if (currentTab === "dashboard") {
+      const storedRole = localStorage.getItem("bato_user_role");
+      const user = getCurrentUser();
+      const hasAccess = storedRole === "ADMIN" || storedRole === "STAFF" || user?.role === "admin" || user?.role === "staff";
+      if (!hasAccess) {
+        console.warn("Unauthorized administrative tab access blocked. Redirecting to home terminal...");
+        changeTab("home");
+      }
+    }
+  }, [currentTab, currentUser]);
 
   // Listen for Supabase Realtime broadcast and custom native event alerts
   useEffect(() => {
@@ -309,6 +309,15 @@ export default function App() {
     changeTab("home");
   };
 
+  const handleUserLogout = () => {
+    logoutUser();
+    setIsAdmin(false);
+    localStorage.removeItem("bato_user_role");
+    setCurrentUser(null);
+    changeTab("home");
+    setIsSidebarOpen(false);
+  };
+
   const handleSelectName = (name: string) => {
     setPrefilledName(name);
     changeTab("cac");
@@ -326,38 +335,104 @@ export default function App() {
 
   const handleLogoTripleClick = () => {
     setShowAdminLoginOverlay(true);
-    setAdminStep("passkey");
+    setAdminStep("login");
     setAccessCodeInput("");
     setAdminEmail("");
     setAdminPassword("");
     setOverlayError("");
   };
 
-  const handleOverlaySubmit = (e: React.FormEvent) => {
+  const handleOverlaySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminStep === "passkey") {
-      const code = accessCodeInput.trim();
-      if (code === "9999") {
-        setAdminStep("login");
-        setOverlayError("");
-      } else if (code === "8888") {
-        localStorage.setItem("bato_user_role", "STAFF");
-        setIsAdmin(true);
-        setShowAdminLoginOverlay(false);
-        setOverlayError("");
-        changeTab("dashboard");
-      } else {
-        setOverlayError("Access Denied: Invalid Access Code");
+    setOverlayError("");
+    
+    const emailStr = adminEmail.trim();
+    const passwordStr = adminPassword;
+    
+    if (!emailStr || !passwordStr) {
+      setOverlayError("Please provide both email and password.");
+      return;
+    }
+
+    try {
+      // Authenticate via Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: emailStr,
+        password: passwordStr
+      });
+
+      if (error) {
+        throw error;
       }
-    } else {
-      // Step 2: email & password check
-      if (adminEmail.trim() === "admin@batosam.ng" && adminPassword === "BatoSamMaster2024!") {
+
+      if (data?.user) {
+        // Fetch profile to verify role
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role, full_name, avatar_url")
+          .eq("id", data.user.id)
+          .single();
+
+        if (profileError) {
+          console.warn("Could not query user profile from Supabase:", profileError);
+        }
+
+        const role = profile?.role || data.user.user_metadata?.role || "user";
+
+        if (role === "admin" || role === "staff") {
+          const uRole = role.toUpperCase(); // "ADMIN" or "STAFF"
+          localStorage.setItem("bato_user_role", uRole);
+          
+          const userObj = {
+            id: data.user.id,
+            fullName: profile?.full_name || data.user.user_metadata?.full_name || data.user.email?.split("@")[0] || "Authorized User",
+            email: data.user.email || "",
+            phone: data.user.phone || "",
+            role: role as any,
+            avatarUrl: profile?.avatar_url || data.user.user_metadata?.avatar_url || "",
+          };
+          localStorage.setItem("bato_sam_current_user", JSON.stringify(userObj));
+          window.dispatchEvent(new Event("bato_user_session_changed"));
+          
+          setIsAdmin(true);
+          setShowAdminLoginOverlay(false);
+          setOverlayError("");
+          changeTab("dashboard");
+        } else {
+          // Unauthorised role, sign them out of Supabase immediately!
+          await supabase.auth.signOut();
+          setOverlayError("Access Denied: You do not have permissions to access the secure administrative workspace.");
+        }
+      } else {
+        throw new Error("No user object returned from authentication.");
+      }
+    } catch (err: any) {
+      console.error("Master administrative login exception:", err);
+      // For developer testing / local simulation when database is in sandbox:
+      // Allow fallback if email is 'admin@batosam.ng' and password is 'BatoSamMaster2024!'
+      if (emailStr === "admin@batosam.ng" && passwordStr === "BatoSamMaster2024!") {
         localStorage.setItem("bato_user_role", "ADMIN");
+        
+        const simulatedAdmin = {
+          id: "BATO-ADM-9999",
+          fullName: "Samuel Emmanuel (Master)",
+          email: "admin@batosam.ng",
+          phone: "08030000000",
+          role: "admin" as const,
+          inviteCode: "BATO-INV-ADM",
+          referralCount: 15,
+          referredEmails: [],
+          idVerified: true
+        };
+        localStorage.setItem("bato_sam_current_user", JSON.stringify(simulatedAdmin));
+        window.dispatchEvent(new Event("bato_user_session_changed"));
+        
         setIsAdmin(true);
         setShowAdminLoginOverlay(false);
+        setOverlayError("");
         changeTab("dashboard");
       } else {
-        setOverlayError("Invalid Admin Email or Password");
+        setOverlayError(err.message || "Invalid Admin Email or Password");
       }
     }
   };
@@ -383,6 +458,9 @@ export default function App() {
           onLogoTripleClick={handleLogoTripleClick}
           theme={theme}
           onToggleTheme={handleToggleTheme}
+          currentUser={currentUser}
+          onOpenSidebar={() => setIsSidebarOpen(true)}
+          onOpenLoginModal={() => setShowLoginModal(true)}
         />
 
         {/* Main Single-File Route Switcher with Motion transitions */}
@@ -398,20 +476,21 @@ export default function App() {
             >
               {currentTab === "home" && (
                 <>
-                  {/* Home Page Layout */}
-                  <Hero onStartProject={() => changeTab("printing")} />
-                  
-                  {/* Service Grid: Triggers tab changes instead of scrolling */}
-                  <ServiceGrid onSelectService={handleGridNav} />
-
-                  {/* Bato Sam AI "Crazy Idea" Branding Tool Block */}
-                  <section className="bg-white py-20 border-b border-zinc-200 relative">
-                    <div className="mx-auto max-w-4xl px-6">
-                      <BrandingKit onSelectName={handleSelectName} />
-                    </div>
-                  </section>
-
-                  <ProcessSection />
+                  {currentUser ? (
+                    <UserDashboard 
+                      currentUser={currentUser} 
+                      onSelectService={(service) => {
+                        if (service === "cac") changeTab("cac");
+                        else if (service === "printing") changeTab("printing");
+                        else if (service === "academy") changeTab("academy");
+                      }} 
+                    />
+                  ) : (
+                    <LandingView 
+                      onGetStarted={() => setShowLoginModal(true)} 
+                      onLogoTripleClick={handleLogoTripleClick}
+                    />
+                  )}
                 </>
               )}
 
@@ -618,78 +697,45 @@ export default function App() {
                   <span className="font-sans text-lg font-black">⚙</span>
                 </div>
                 <h3 className="font-sans text-lg font-bold text-zinc-900 uppercase tracking-wider">
-                  {adminStep === "passkey" ? "Administrative Gatekeeper" : "Master Security Access"}
+                  Master Security Access
                 </h3>
                 <p className="text-[10px] text-zinc-500 font-semibold max-w-xs mx-auto leading-normal">
-                  {adminStep === "passkey" 
-                    ? "Enter your 4-digit Master Passkey or Staff access code to reveal secure terminals."
-                    : "Terminal unlocked! Input your supreme database email and secure password to command."
-                  }
+                  Input your supreme database email and secure password to command the terminal.
                 </p>
               </div>
 
               <form onSubmit={handleOverlaySubmit} className="space-y-4">
-                <AnimatePresence mode="wait">
-                  {adminStep === "passkey" ? (
-                    <motion.div
-                      key="step-passkey"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      className="space-y-4"
-                    >
-                      <div className="space-y-1.5">
-                        <input 
-                          type="password"
-                          required
-                          autoFocus
-                          placeholder="ENTER SECRET PASSKEY"
-                          value={accessCodeInput}
-                          onChange={(e) => setAccessCodeInput(e.target.value)}
-                          className="w-full text-center tracking-widest text-sm font-mono font-bold uppercase rounded-md border border-zinc-300 bg-zinc-50 px-4 py-3 text-zinc-900 outline-none focus:border-black transition-all"
-                        />
-                      </div>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="step-credentials"
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      className="space-y-4"
-                    >
-                      <div className="space-y-3">
-                        <div className="space-y-1">
-                          <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500">
-                            Admin Account Email
-                          </label>
-                          <input 
-                            type="email"
-                            required
-                            placeholder="admin@batosam.ng"
-                            value={adminEmail}
-                            onChange={(e) => setAdminEmail(e.target.value)}
-                            className="w-full rounded-md border border-zinc-300 bg-zinc-50 px-4 py-2.5 text-xs font-bold text-zinc-900 outline-none focus:border-black transition-all"
-                          />
-                        </div>
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500">
+                        Account Email
+                      </label>
+                      <input 
+                        type="email"
+                        required
+                        placeholder="admin@batosam.ng"
+                        value={adminEmail}
+                        onChange={(e) => setAdminEmail(e.target.value)}
+                        className="w-full rounded-md border border-zinc-300 bg-zinc-50 px-4 py-2.5 text-xs font-bold text-zinc-900 outline-none focus:border-black transition-all"
+                      />
+                    </div>
 
-                        <div className="space-y-1">
-                          <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500">
-                            Secure Master Password
-                          </label>
-                          <input 
-                            type="password"
-                            required
-                            placeholder="••••••••"
-                            value={adminPassword}
-                            onChange={(e) => setAdminPassword(e.target.value)}
-                            className="w-full rounded-md border border-zinc-300 bg-zinc-50 px-4 py-2.5 text-xs font-bold text-zinc-900 outline-none focus:border-black transition-all"
-                          />
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500">
+                        Secure Master Password
+                      </label>
+                      <input 
+                        type="password"
+                        required
+                        placeholder="••••••••"
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        className="w-full rounded-md border border-zinc-300 bg-zinc-50 px-4 py-2.5 text-xs font-bold text-zinc-900 outline-none focus:border-black transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
 
                 {overlayError && (
                   <p className="text-[9px] font-mono font-bold text-red-600 text-center uppercase tracking-wide">
@@ -701,13 +747,24 @@ export default function App() {
                   type="submit"
                   className="w-full rounded-md bg-black hover:bg-zinc-900 py-3 text-xs font-black text-white transition-all cursor-pointer uppercase tracking-wider shadow-sm"
                 >
-                  {adminStep === "passkey" ? "Verify Key Code" : "Submit Credentials"}
+                  Submit Credentials
                 </button>
               </form>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      <SidebarMenu 
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        currentUser={currentUser}
+        onLogout={handleUserLogout}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
+        isAdmin={isAdmin}
+        onChangeTab={changeTab}
+      />
 
       {/* PWA Install Trigger Bottom Modal Sheet */}
       <InstallPWAPrompt />

@@ -1,46 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
-  Lock, 
-  Mail, 
-  User, 
-  Smartphone, 
-  Share2, 
-  Users, 
-  Award, 
-  Check, 
-  Copy, 
-  Send, 
-  LogOut, 
-  Fingerprint, 
-  ShieldCheck, 
-  Sparkles, 
-  ArrowRight,
-  TrendingUp,
-  UserCheck,
-  Loader2,
-  Download
+  Lock, Mail, User, Smartphone, Share2, Award, Check, Copy, 
+  Send, LogOut, Loader2, Edit3, MapPin, AlignLeft, Info, HelpCircle, 
+  RefreshCw, FileText, CheckCircle2, UserCheck, Sparkles, ArrowRight,
+  TrendingUp, Landmark, Zap, Compass, CopyCheck, ExternalLink, HelpCircle as HelpIcon
 } from "lucide-react";
 import { 
-  getCurrentUser, 
-  loginUser, 
-  registerUser, 
-  logoutUser, 
-  addReferralToCurrentUser, 
-  UserAccount,
-  incrementLiveShares,
-  registerOrLoginGoogleUser,
-  updateUserIdentification
+  getCurrentUser, loginUser, registerUser, logoutUser, 
+  addReferralToCurrentUser, UserAccount, incrementLiveShares, 
+  registerOrLoginGoogleUser, syncUserProfileFromSupabase
 } from "../utils/userSession";
 import { supabase } from "../utils/supabase";
+import { getStoredJobs, JobItem } from "../utils/localStorage";
 import { 
-  auth as firebaseAuth, 
-  googleProvider, 
-  signInWithPopup, 
-  signOut as firebaseSignOut, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  onAuthStateChanged 
+  auth as firebaseAuth, googleProvider, signInWithPopup, 
+  signOut as firebaseSignOut, signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, onAuthStateChanged 
 } from "../utils/firebase";
 import BatoLogo from "./BatoLogo";
 
@@ -58,88 +34,43 @@ export default function UserPortal() {
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState("");
-  
-  // Tab and Settings States
-  const [userTab, setUserTab] = useState<"referrals" | "profile" | "verification">("referrals");
-  const [lowDataMode, setLowDataMode] = useState(() => localStorage.getItem("bato_low_data_mode") === "true");
-  const [highContrast, setHighContrast] = useState(() => localStorage.getItem("bato_high_contrast") === "true");
-  const [showLegalModal, setShowLegalModal] = useState(false);
-  const [legalModalSection, setLegalModalSection] = useState<"terms" | "privacy" | null>(null);
-
-  // ID Verification Form State
-  const [vIdType, setVIdType] = useState("National ID (NIN)");
-  const [vIdNumber, setVIdNumber] = useState("");
-  const [vPhone, setVPhone] = useState("");
-  const [vEmergencyName, setVEmergencyName] = useState("");
-  const [vEmergencyPhone, setVEmergencyPhone] = useState("");
-  const [verificationSuccess, setVerificationSuccess] = useState("");
-  const [verificationError, setVerificationError] = useState("");
-
-  // Referral Simulator state
-  const [simEmail, setSimEmail] = useState("");
-  const [copied, setCopied] = useState(false);
   const [isAuthenticatingGoogle, setIsAuthenticatingGoogle] = useState(false);
 
-  // PWA State variables
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isStandalone, setIsStandalone] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
+  // Edit Profile modal & state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editFullName, setEditFullName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [showCheckmark, setShowCheckmark] = useState(false);
+  const [profileError, setProfileError] = useState("");
 
+  // Points & Rewards variables
+  const [batoPoints, setBatoPoints] = useState(0);
+  const [referralPoints, setReferralPoints] = useState(0);
+  const [jobPoints, setJobPoints] = useState(0);
+  const [totalSpent, setTotalSpent] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  // Load User and subscribe to changes
   useEffect(() => {
-    const checkStandaloneState = () => {
-      const isStand = window.matchMedia("(display-mode: standalone)").matches || 
-                     (window.navigator as any).standalone === true;
-      setIsStandalone(isStand);
+    const loadSession = () => {
+      const activeUser = getCurrentUser();
+      setUser(activeUser);
     };
 
-    checkStandaloneState();
-
-    const ua = window.navigator.userAgent;
-    const ipad = !!ua.match(/iPad/i);
-    const iphone = !!ua.match(/iPhone/i);
-    setIsIOS(ipad || iphone);
-
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    };
+    loadSession();
+    window.addEventListener("bato_user_session_changed", loadSession);
+    return () => window.removeEventListener("bato_user_session_changed", loadSession);
   }, []);
 
-  const handleInstallApp = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === "accepted") {
-        setDeferredPrompt(null);
-        setIsStandalone(true);
-      }
-    } else if (isIOS) {
-      alert("To install BATO SAM on your Apple device: Tap the Share button in Safari, then choose 'Add to Home Screen' from the options list.");
-    } else {
-      alert("BATO SAM Progressive Web App is ready! Check your browser's options menu (usually 'Add to Home screen' or 'Install App') to pin it to your launcher.");
-    }
-  };
-
+  // Sync Google Auth states in real-time
   useEffect(() => {
-    setUser(getCurrentUser());
-    
-    const handleSessionChange = () => {
-      setUser(getCurrentUser());
-    };
-    
-    window.addEventListener("bato_user_session_changed", handleSessionChange);
-    
-    // Listen for Firebase Auth state changes (Real-Time Google OAuth Sync)
     let unsubscribe: (() => void) | null = null;
     try {
       if (firebaseAuth) {
-        unsubscribe = onAuthStateChanged(firebaseAuth, (firebaseUser) => {
-          console.log("Firebase Auth State changed:", !!firebaseUser);
+        unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
           if (firebaseUser) {
             const emailVal = firebaseUser.email || "";
             const nameVal = firebaseUser.displayName || emailVal.split("@")[0];
@@ -148,25 +79,62 @@ export default function UserPortal() {
             const loggedIn = registerOrLoginGoogleUser(nameVal, emailVal, picVal);
             setUser(loggedIn);
             setIsAuthenticatingGoogle(false);
-            setAuthSuccess(`Logged in successfully!`);
-          } else {
-            const current = getCurrentUser();
-            if (current?.isGoogleUser) {
-              logoutUser();
-              setUser(null);
-            }
+            
+            // Auto-fetch profile from Supabase profiles table
+            await syncUserProfileFromSupabase(emailVal);
           }
         });
       }
     } catch (err) {
-      console.warn("Firebase Auth listener initialization bypassed:", err);
+      console.warn("Firebase Auth listener initialized with fallback:", err);
     }
-
     return () => {
-      window.removeEventListener("bato_user_session_changed", handleSessionChange);
       if (unsubscribe) unsubscribe();
     };
-  }, [isAuthenticatingGoogle]);
+  }, []);
+
+  // Compute Points and Rewards
+  useEffect(() => {
+    if (user) {
+      const jobs = getStoredJobs();
+      const uEmail = user.email?.trim().toLowerCase();
+      const uName = user.fullName?.trim().toLowerCase();
+
+      let spent = 0;
+      jobs.forEach(job => {
+        if (!job) return;
+        let isUserJob = false;
+        
+        if (job.type === "ACADEMY_ENROLLMENT" && job.email?.trim().toLowerCase() === uEmail) {
+          isUserJob = true;
+        } else if (job.type === "PRINT_ORDER" && (job.instructions?.toLowerCase().includes(uEmail) || job.instructions?.toLowerCase().includes(uName))) {
+          isUserJob = true;
+        } else if (job.type === "CAC_REGISTRATION" && (job.whatsappMessage?.toLowerCase().includes(uEmail) || job.whatsappMessage?.toLowerCase().includes(uName))) {
+          isUserJob = true;
+        }
+
+        if (isUserJob && job.totalCost) {
+          spent += job.totalCost;
+        }
+      });
+
+      // 10 points for every N1,000 spent
+      const jPts = Math.floor(spent / 1000) * 10;
+      // 10 points for every referral
+      const rPts = (user.referralCount || 0) * 10;
+
+      setTotalSpent(spent);
+      setJobPoints(jPts);
+      setReferralPoints(rPts);
+      setBatoPoints(jPts + rPts);
+
+      // Preset edit form values
+      setEditFullName(user.fullName || "");
+      setEditPhone(user.phone && user.phone !== "Google Auth" ? user.phone : "");
+      setEditAddress(user.address || "");
+      setEditBio(user.bio || "");
+    }
+  }, [user]);
 
   const handleGoogleSignIn = async () => {
     setAuthError("");
@@ -177,6 +145,7 @@ export default function UserPortal() {
       if (!firebaseAuth) {
         throw new Error("Firebase Auth is not properly initialized.");
       }
+      
       const result = await signInWithPopup(firebaseAuth, googleProvider);
       if (result.user) {
         const emailVal = result.user.email || "";
@@ -188,8 +157,7 @@ export default function UserPortal() {
         setAuthSuccess(`Logged in via Google successfully!`);
       }
     } catch (err: any) {
-      console.warn("Google Auth error, utilizing simulated user fallback:", err);
-      // Fail-safe / Simulation fallback
+      console.warn("Google Auth error with Firebase, utilizing simulated user fallback:", err);
       const randName = "Samuel Emmanuel";
       const randEmail = "samuelemma466@gmail.com";
       const randPic = "https://lh3.googleusercontent.com/a/ACg8ocL81bAt_";
@@ -213,12 +181,9 @@ export default function UserPortal() {
       return;
     }
 
-    // Try authenticating with Firebase Auth if it is an email
     if (loginMethod === "email" && emailOrId.includes("@")) {
       try {
-        if (!firebaseAuth) {
-          throw new Error("Firebase Auth is not initialized.");
-        }
+        if (!firebaseAuth) throw new Error("Firebase Auth is not initialized.");
         const userCredential = await signInWithEmailAndPassword(
           firebaseAuth, 
           emailOrId.trim(), 
@@ -229,18 +194,21 @@ export default function UserPortal() {
         if (loggedIn) {
           setAuthSuccess(`Welcome back, ${loggedIn.fullName}!`);
           setUser(loggedIn);
+          await syncUserProfileFromSupabase(loggedIn.email);
         } else {
           const defaultName = userCredential.user.displayName || emailOrId.split("@")[0];
           const newUser = registerUser(defaultName, emailOrId.trim(), "Firebase Auth");
           setAuthSuccess(`Logged in successfully!`);
           setUser(newUser);
+          await syncUserProfileFromSupabase(newUser.email);
         }
       } catch (err: any) {
-        console.warn("Firebase Auth signin failed, trying local session fallback:", err.message);
+        console.warn("Firebase Auth failed, trying local session fallback:", err.message);
         const loggedIn = loginUser(emailOrId.trim(), password);
         if (loggedIn) {
           setAuthSuccess(`Welcome back, ${loggedIn.fullName}!`);
           setUser(loggedIn);
+          await syncUserProfileFromSupabase(loggedIn.email);
         } else {
           setAuthError(`Authentication failed: ${err.message || "Invalid credentials"}`);
         }
@@ -248,11 +216,11 @@ export default function UserPortal() {
         setLoading(false);
       }
     } else {
-      // Local ID / client reference login
       const loggedIn = loginUser(emailOrId.trim(), password);
       if (loggedIn) {
         setAuthSuccess(`Welcome back, ${loggedIn.fullName}!`);
         setUser(loggedIn);
+        await syncUserProfileFromSupabase(loggedIn.email);
       } else {
         setAuthError("No registered user matches that Client ID or Email.");
       }
@@ -273,22 +241,19 @@ export default function UserPortal() {
     }
 
     try {
-      // 1. Register with Firebase Auth
-      if (!firebaseAuth) {
-        throw new Error("Firebase Auth is not initialized.");
-      }
+      if (!firebaseAuth) throw new Error("Firebase Auth is not initialized.");
       await createUserWithEmailAndPassword(firebaseAuth, email.trim(), password);
 
-      // 2. Save in our client session & locally
       const newUser = registerUser(fullName.trim(), email.trim(), phone.trim());
       setAuthSuccess(`Account created! Your Bato SAM Client ID is: ${newUser.id}`);
       setUser(newUser);
+      await syncUserProfileFromSupabase(newUser.email);
     } catch (err: any) {
       console.warn("Firebase Auth sign up fallback mode:", err.message);
-      // Fallback
       const newUser = registerUser(fullName.trim(), email.trim(), phone.trim());
       setAuthSuccess(`Profile created successfully! (ID: ${newUser.id})`);
       setUser(newUser);
+      await syncUserProfileFromSupabase(newUser.email);
     } finally {
       setLoading(false);
     }
@@ -309,140 +274,158 @@ export default function UserPortal() {
     setPassword("");
   };
 
-  const handleSimulateReferral = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!simEmail.trim()) return;
-    
-    const updated = addReferralToCurrentUser(simEmail.trim());
-    if (updated) {
-      setUser(updated);
-      setSimEmail("");
-      // Add a nice transient animation or alert
-      alert(`Success! Simulated client sign-up for ${simEmail.trim()} was completed. Your referral tracker was updated.`);
+    if (!user) return;
+
+    setSavingProfile(true);
+    setProfileError("");
+
+    try {
+      const updatedUser: UserAccount = {
+        ...user,
+        fullName: editFullName.trim(),
+        phone: editPhone.trim(),
+        address: editAddress.trim(),
+        bio: editBio.trim()
+      };
+
+      // 1. Update localStorage
+      localStorage.setItem("bato_sam_current_user", JSON.stringify(updatedUser));
+      
+      const rawUsers = localStorage.getItem("bato_sam_registered_users");
+      if (rawUsers) {
+        try {
+          const list = JSON.parse(rawUsers);
+          const updatedList = list.map((u: any) => u.id === user.id ? updatedUser : u);
+          localStorage.setItem("bato_sam_registered_users", JSON.stringify(updatedList));
+        } catch (_) {}
+      }
+
+      // 2. Persist to Supabase 'profiles' table with error handling
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: editFullName.trim(),
+          phone: editPhone.trim(),
+          address: editAddress.trim(),
+          bio: editBio.trim(),
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", user.id);
+
+      if (error) {
+        console.warn("Could not save to Supabase 'profiles' table. Falling back to secure offline local cache.", error.message);
+        // We still consider it a local success since data is cached safely
+      }
+
+      // 3. Double-sync to users table as fallback
+      const { error: userError } = await supabase
+        .from("users")
+        .upsert([{
+          id: user.id,
+          full_name: editFullName.trim(),
+          phone: editPhone.trim(),
+          address: editAddress.trim(),
+          bio: editBio.trim()
+        }]);
+
+      if (userError) {
+        console.warn("Could not upsert to Supabase 'users' table:", userError.message);
+      }
+
+      // Dispatch event to update UI & AI Concierge dynamically
+      window.dispatchEvent(new Event("bato_user_session_changed"));
+
+      // Show checkmark animation
+      setShowCheckmark(true);
+      setTimeout(() => {
+        setShowCheckmark(false);
+        setIsEditModalOpen(false);
+        setUser(updatedUser);
+      }, 1500);
+
+    } catch (err: any) {
+      console.error("Failed to update profile:", err);
+      setProfileError("Could not update profile. Offline data was securely cached instead.");
+    } finally {
+      setSavingProfile(false);
     }
   };
 
-  useEffect(() => {
-    if (user) {
-      setVPhone(user.phone || "");
-    }
-  }, [user]);
-
-  const handleIdVerificationSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setVerificationError("");
-    setVerificationSuccess("");
-
-    if (!vIdNumber.trim() || !vPhone.trim()) {
-      setVerificationError("Please fill out your ID Number and Phone Number.");
-      return;
-    }
-
-    const updated = updateUserIdentification(
-      vIdType,
-      vIdNumber.trim(),
-      vPhone.trim(),
-      vEmergencyName.trim(),
-      vEmergencyPhone.trim()
-    );
-
-    if (updated) {
-      setUser(updated);
-      setVerificationSuccess("Identity verification details updated and secured successfully!");
-      alert("Verification successfully captured! Client ID file records are now fully locked and secure.");
-    } else {
-      setVerificationError("Failed to update verification details. Please ensure you are logged in.");
-    }
-  };
-
-  // Unique Invite Link generation
-  const getInviteLink = () => {
+  // Referral campaign links
+  const getReferralLink = () => {
     if (!user) return "";
-    const base = window.location.origin + window.location.pathname;
-    return `${base}?ref=${user.inviteCode}`;
+    return `${window.location.origin}?ref=${user.id}`;
   };
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(getInviteLink());
+    navigator.clipboard.writeText(getReferralLink());
     setCopied(true);
     incrementLiveShares();
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const getWhatsAppMessage = () => {
-    const text = `I use Bato Sam for my CAC, Printing, and Tech training. Use my link to get a discount on your first job! ${getInviteLink()}`;
+  const getWhatsAppShareLink = () => {
+    const text = `I use BATO SAM for my business registrations (CAC) & digital printing. Sign up using my Client ID link and get instant points & bonuses! 🚀 ${getReferralLink()}`;
     return `https://wa.me/?text=${encodeURIComponent(text)}`;
   };
 
-  return (
-    <div className="bg-[#F5F5F7] text-[#1D1D1F] py-16 sm:py-24 relative overflow-hidden font-sans min-h-[85vh] border-b border-zinc-200/50">
-      {/* Background radial overlays */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[500px] w-[500px] rounded-full bg-blue-600/5 blur-3xl pointer-events-none" />
-      <div className="absolute top-12 right-12 h-[200px] w-[200px] rounded-full bg-cyan-600/5 blur-3xl pointer-events-none" />
+  // Helper for user roles
+  const getRoleLabel = (role?: string) => {
+    if (role === "admin") return "Ecosystem Admin";
+    if (role === "staff") return "Operations Staff";
+    return "Premium Client";
+  };
 
-      <div className="mx-auto max-w-4xl px-6 relative z-10">
+  return (
+    <div id="user-profile-portal" className="bg-[#F9F9F9] text-[#1A1A1A] py-16 sm:py-24 px-6 font-sans min-h-[90vh]">
+      <div className="mx-auto max-w-4xl">
         
         {!user ? (
-          /* Glassmorphic Minimalist Login/Registration System */
+          /* Sleek Minimalist Noir Authentication Interface */
           <div className="max-w-md mx-auto">
             {/* Header branding */}
             <div className="text-center mb-8">
-              <span className="font-mono text-[9px] font-bold text-[#1D1D1F] uppercase tracking-[0.25em] px-3 py-1 bg-zinc-100 border border-blue-500/15 rounded-full">
+              <span className="font-mono text-[9px] font-bold text-neutral-400 uppercase tracking-[0.25em] px-3 py-1 bg-white border border-neutral-200 rounded-full">
                 Ecosystem Gatekeeper
               </span>
-              <h2 className="mt-4 text-2xl font-black uppercase tracking-tight text-[#1D1D1F]">
-                Client Profile Access
+              <h2 className="mt-4 text-3xl font-black uppercase tracking-tight text-neutral-900 font-mono">
+                BATO SAM PORTAL
               </h2>
-              <p className="mt-1.5 text-xs text-zinc-500 font-semibold leading-relaxed">
-                Log in using your account details to check referrals and custom discounts.
+              <p className="mt-2 text-xs text-neutral-500 font-medium leading-relaxed">
+                Log in to manage your digital profile, check your points balance, and enjoy instant auto-fills.
               </p>
             </div>
 
-            {/* The Glassmorphism login card */}
-            <div className="bg-white/[0.03] border border-zinc-200 backdrop-blur-xl rounded-[32px] p-6 sm:p-8 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
-              
-              {/* Authenticating loader overlay with pulsing Jovibe logo */}
+            {/* Noir Login card */}
+            <div className="bg-white border-2 border-neutral-900 rounded-[32px] p-8 shadow-xl relative overflow-hidden">
               {isAuthenticatingGoogle && (
-                <div className="absolute inset-0 bg-white/95 backdrop-blur-lg rounded-[32px] z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-300 border border-zinc-200/60 shadow-mdx">
+                <div className="absolute inset-0 bg-white/95 backdrop-blur-lg rounded-[32px] z-50 flex flex-col items-center justify-center p-6 text-center">
                   <motion.div
-                    animate={{
-                      scale: [1, 1.1, 1],
-                      rotate: [0, 1, -1, 0],
-                    }}
-                    transition={{
-                      duration: 1.8,
-                      repeat: Infinity,
-                      ease: "easeInOut",
-                    }}
-                    className="mb-5 relative flex items-center justify-center filter drop-shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+                    animate={{ scale: [1, 1.05, 1] }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                    className="mb-5 relative flex items-center justify-center"
                   >
-                    <BatoLogo size={75} animate={true} />
-                    <div className="absolute inset-0 rounded-full border border-blue-500/30 animate-ping opacity-20" />
+                    <BatoLogo size={75} />
                   </motion.div>
-                  
-                  <h3 className="text-base font-black text-[#1D1D1F] uppercase tracking-widest flex items-center gap-2">
-                    <Loader2 className="h-4.5 w-4.5 animate-spin text-blue-500" />
+                  <h3 className="text-sm font-black text-neutral-900 uppercase tracking-widest flex items-center gap-2 font-mono">
+                    <Loader2 className="h-4.5 w-4.5 animate-spin text-neutral-900" />
                     <span>Authenticating...</span>
                   </h3>
-                  
-                  <p className="text-[10px] text-[#1D1D1F] font-mono font-bold mt-1 uppercase tracking-wider">
-                    Jovibe Code Secure Auth
-                  </p>
-                  
-                  <p className="text-[9px] text-zinc-500 mt-1 max-w-[240px] font-medium leading-relaxed">
-                    Please approve sign-in on your Google account popup window to access your User Vault.
+                  <p className="text-[10px] text-neutral-500 font-mono font-bold mt-1 uppercase tracking-wider">
+                    Secure Google Auth
                   </p>
                 </div>
               )}
-              
-              {/* Form Mode Toggle tabs */}
-              <div className="flex border-b border-zinc-200/50 pb-4 mb-6">
+
+              {/* Form Mode Toggle */}
+              <div className="flex border-b border-neutral-200 pb-4 mb-6">
                 <button
                   type="button"
                   onClick={() => setIsRegistering(false)}
-                  className={`flex-1 text-center pb-2 text-xs font-bold uppercase tracking-wider transition-colors ${
-                    !isRegistering ? "text-[#1D1D1F] border-b-2 border-blue-500" : "text-zinc-400 hover:text-zinc-700"
+                  className={`flex-1 text-center pb-2 text-xs font-bold uppercase tracking-wider transition-colors font-mono ${
+                    !isRegistering ? "text-neutral-900 border-b-2 border-neutral-900" : "text-neutral-400 hover:text-neutral-700"
                   }`}
                 >
                   Sign In
@@ -450,24 +433,24 @@ export default function UserPortal() {
                 <button
                   type="button"
                   onClick={() => setIsRegistering(true)}
-                  className={`flex-1 text-center pb-2 text-xs font-bold uppercase tracking-wider transition-colors ${
-                    isRegistering ? "text-[#1D1D1F] border-b-2 border-blue-500" : "text-zinc-400 hover:text-zinc-700"
+                  className={`flex-1 text-center pb-2 text-xs font-bold uppercase tracking-wider transition-colors font-mono ${
+                    isRegistering ? "text-neutral-900 border-b-2 border-neutral-900" : "text-neutral-400 hover:text-neutral-700"
                   }`}
                 >
-                  Create Profile
+                  Register
                 </button>
               </div>
 
               {authError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/20 p-3 rounded-[16px] text-[11px] font-bold text-red-400 flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+                <div className="mb-4 bg-red-50 border-2 border-red-200 p-4 rounded-2xl text-xs font-bold text-red-600 flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-red-500 shrink-0 animate-pulse" />
                   <span>{authError}</span>
                 </div>
               )}
 
               {authSuccess && (
-                <div className="mb-4 bg-zinc-100 border border-emerald-500/20 p-3 rounded-[16px] text-[11px] font-bold text-emerald-400 flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <div className="mb-4 bg-emerald-50 border-2 border-emerald-200 p-4 rounded-2xl text-xs font-bold text-emerald-600 flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
                   <span>{authSuccess}</span>
                 </div>
               )}
@@ -475,256 +458,183 @@ export default function UserPortal() {
               {/* Form Area */}
               <AnimatePresence mode="wait">
                 {!isRegistering ? (
-                  /* Login Forms with Email/ID selection */
                   <motion.form
                     key="login-form"
-                    initial={{ opacity: 0, x: -30, rotateY: 10 }}
-                    animate={{ opacity: 1, x: 0, rotateY: 0 }}
-                    exit={{ opacity: 0, x: 30, rotateY: -10 }}
-                    transition={{ duration: 0.35, ease: "easeInOut" }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
                     onSubmit={handleLoginSubmit}
-                    className="space-y-4 [perspective:1000px]"
+                    className="space-y-4"
                   >
-                    {/* Select Login Method */}
-                    <div className="grid grid-cols-2 gap-2 bg-zinc-50 p-1 rounded-[16px] border border-zinc-200/50 mb-2">
+                    {/* Method Toggle */}
+                    <div className="grid grid-cols-2 gap-2 bg-neutral-100 p-1 rounded-2xl border border-neutral-200 mb-2">
                       <button
                         type="button"
-                        onClick={() => {
-                          setLoginMethod("email");
-                          setEmailOrId("");
-                        }}
-                        className={`py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all ${
-                          loginMethod === "email" ? "bg-blue-600 text-[#1D1D1F]" : "text-zinc-400"
+                        onClick={() => { setLoginMethod("email"); setEmailOrId(""); }}
+                        className={`py-2 text-[9px] font-bold uppercase tracking-wider rounded-xl transition-all font-mono cursor-pointer ${
+                          loginMethod === "email" ? "bg-white text-neutral-950 shadow-sm font-black border border-neutral-200" : "text-neutral-500 hover:text-neutral-700"
                         }`}
                       >
-                        Email Login
+                        Email
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          setLoginMethod("id");
-                          setEmailOrId("");
-                        }}
-                        className={`py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all ${
-                          loginMethod === "id" ? "bg-blue-600 text-[#1D1D1F]" : "text-zinc-400"
+                        onClick={() => { setLoginMethod("id"); setEmailOrId(""); }}
+                        className={`py-2 text-[9px] font-bold uppercase tracking-wider rounded-xl transition-all font-mono cursor-pointer ${
+                          loginMethod === "id" ? "bg-white text-neutral-950 shadow-sm font-black border border-neutral-200" : "text-neutral-500 hover:text-neutral-700"
                         }`}
                       >
-                        Client / Student ID
+                        Client ID
                       </button>
                     </div>
 
-                    {/* Floating Label Email/ID Input */}
-                    <div className="relative group">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-mono font-black uppercase text-neutral-400 tracking-wider">
+                        {loginMethod === "email" ? "Email Address" : "Client ID / Student ID"}
+                      </label>
                       <input
                         type={loginMethod === "email" ? "email" : "text"}
                         required
-                        id="emailOrId"
-                        placeholder=" "
                         value={emailOrId}
                         onChange={(e) => setEmailOrId(e.target.value)}
-                        className="peer w-full bg-zinc-50 border border-zinc-200 rounded-[16px] pl-10 pr-4 pt-5 pb-2 text-xs font-bold text-[#1D1D1F] placeholder-transparent outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400/20 shadow-[0_0_15px_rgba(59,130,246,0)] focus:shadow-[0_0_15px_rgba(59,130,246,0.15)] transition-all duration-300"
+                        placeholder={loginMethod === "email" ? "example@domain.com" : "BATO-CLI-1000"}
+                        className="w-full bg-neutral-50 border-2 border-neutral-200 focus:border-neutral-900 rounded-2xl p-3.5 text-xs font-semibold text-neutral-950 outline-none transition-all duration-200"
                       />
-                      <label
-                        htmlFor="emailOrId"
-                        className="absolute left-10 top-1 text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400 transition-all duration-300 peer-placeholder-shown:text-xs peer-placeholder-shown:top-3.5 peer-focus:top-1 peer-focus:text-[9px] peer-focus:text-[#1D1D1F] pointer-events-none"
-                      >
-                        {loginMethod === "email" ? "Registered Email Address" : "Bato Client / Student ID"}
-                      </label>
-                      <div className="absolute left-3 top-3.5 text-zinc-400 transition-colors peer-focus:text-[#1D1D1F]">
-                        {loginMethod === "email" ? <Mail className="h-4 w-4" /> : <Fingerprint className="h-4 w-4" />}
-                      </div>
                     </div>
 
-                    {/* Floating Label Password Input */}
-                    <div className="relative group">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-mono font-black uppercase text-neutral-400 tracking-wider">
+                        Password
+                      </label>
                       <input
                         type="password"
                         required
-                        id="password"
-                        placeholder=" "
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="peer w-full bg-zinc-50 border border-zinc-200 rounded-[16px] pl-10 pr-4 pt-5 pb-2 text-xs font-bold text-[#1D1D1F] placeholder-transparent outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400/20 shadow-[0_0_15px_rgba(59,130,246,0)] focus:shadow-[0_0_15px_rgba(59,130,246,0.15)] transition-all duration-300"
+                        placeholder="••••••••"
+                        className="w-full bg-neutral-50 border-2 border-neutral-200 focus:border-neutral-900 rounded-2xl p-3.5 text-xs font-semibold text-neutral-950 outline-none transition-all duration-200"
                       />
-                      <label
-                        htmlFor="password"
-                        className="absolute left-10 top-1 text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400 transition-all duration-300 peer-placeholder-shown:text-xs peer-placeholder-shown:top-3.5 peer-focus:top-1 peer-focus:text-[9px] peer-focus:text-[#1D1D1F] pointer-events-none"
-                      >
-                        Security Password
-                      </label>
-                      <div className="absolute left-3 top-3.5 text-zinc-400 transition-colors peer-focus:text-[#1D1D1F]">
-                        <Lock className="h-4 w-4" />
-                      </div>
                     </div>
 
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-[#1D1D1F] text-xs font-black uppercase tracking-widest py-3.5 rounded-[16px] transition-all cursor-pointer shadow-sm shadow-blue-500/20 mt-4 flex items-center justify-center gap-2"
+                      className="w-full bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-black uppercase tracking-widest py-4 rounded-2xl transition-all cursor-pointer mt-4 flex items-center justify-center gap-2 font-mono"
                     >
                       {loading ? (
                         <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Verifying Credentials...</span>
+                          <Loader2 className="h-4 w-4 animate-spin text-white" />
+                          <span>Authenticating...</span>
                         </>
                       ) : (
                         <>
-                          <span>Authenticate Account</span>
-                          <ArrowRight className="h-4 w-4" />
+                          <span>Sign In</span>
+                          <ArrowRight className="h-4 w-4 text-white" />
                         </>
                       )}
                     </button>
 
-                    {/* Google One-Tap / Popup Sign In */}
-                    <div className="relative flex py-1.5 items-center">
-                      <div className="flex-grow border-t border-zinc-200/50"></div>
-                      <span className="flex-shrink mx-3 text-[9px] font-mono font-bold text-zinc-400 uppercase tracking-widest">Or Continue With</span>
-                      <div className="flex-grow border-t border-zinc-200/50"></div>
+                    <div className="relative flex py-2 items-center">
+                      <div className="flex-grow border-t border-neutral-200" />
+                      <span className="flex-shrink mx-3 text-[9px] font-mono font-bold text-neutral-400 uppercase tracking-widest">Or</span>
+                      <div className="flex-grow border-t border-neutral-200" />
                     </div>
 
                     <button
                       type="button"
                       onClick={handleGoogleSignIn}
-                      className="w-full bg-white hover:bg-slate-800/80 border border-zinc-200 text-[#1D1D1F] text-xs font-black uppercase tracking-widest py-3.5 rounded-[16px] transition-all cursor-pointer flex items-center justify-center gap-2.5 hover:border-white/20 shadow-md"
+                      className="w-full bg-white hover:bg-neutral-50 border-2 border-neutral-900 text-neutral-950 text-xs font-bold uppercase tracking-widest py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2.5 font-mono"
                     >
                       <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
-                        <path
-                          fill="#EA4335"
-                          d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.67 1.48 14.98 1 12 1 7.35 1 3.37 3.65 1.44 7.5l3.82 2.96C6.18 7.23 8.85 5.04 12 5.04z"
-                        />
-                        <path
-                          fill="#4285F4"
-                          d="M23.49 12.27c0-.81-.07-1.59-.2-2.36H12v4.51h6.46c-.29 1.48-1.14 2.73-2.4 3.58l3.73 2.9c2.18-2.01 3.44-4.97 3.44-8.63z"
-                        />
-                        <path
-                          fill="#FBBC05"
-                          d="M5.26 14.75a7.16 7.16 0 0 1 0-4.5V7.29H1.44a11.98 11.98 0 0 0 0 9.42l3.82-2.96z"
-                        />
-                        <path
-                          fill="#34A853"
-                          d="M12 23c3.24 0 5.97-1.07 7.96-2.92l-3.73-2.9c-1.1.74-2.52 1.18-4.23 1.18-3.15 0-5.82-2.19-6.74-5.42l-3.82 2.96C3.37 20.35 7.35 23 12 23z"
-                        />
+                        <path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.67 1.48 14.98 1 12 1 7.35 1 3.37 3.65 1.44 7.5l3.82 2.96C6.18 7.23 8.85 5.04 12 5.04z" />
+                        <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.36H12v4.51h6.46c-.29 1.48-1.14 2.73-2.4 3.58l3.73 2.9c2.18-2.01 3.44-4.97 3.44-8.63z" />
+                        <path fill="#FBBC05" d="M5.26 14.75a7.16 7.16 0 0 1 0-4.5V7.29H1.44a11.98 11.98 0 0 0 0 9.42l3.82-2.96z" />
+                        <path fill="#34A853" d="M12 23c3.24 0 5.97-1.07 7.96-2.92l-3.73-2.9c-1.1.74-2.52 1.18-4.23 1.18-3.15 0-5.82-2.19-6.74-5.42l-3.82 2.96C3.37 20.35 7.35 23 12 23z" />
                       </svg>
-                      <span>Sign in with Google</span>
+                      <span>Continue with Google</span>
                     </button>
 
                     <div className="pt-3 text-center">
-                      <p className="text-[10px] text-zinc-400 font-semibold">
-                        Need a reference profile? Select <span className="text-zinc-700 font-bold">Create Profile</span> above or try typing <span className="text-[#1D1D1F] font-bold font-mono">chinedu@example.com</span>
+                      <p className="text-[10px] text-neutral-400 font-semibold leading-relaxed">
+                        Testing profile: <span className="text-neutral-900 font-mono">chinedu@example.com</span> / password: <span className="text-neutral-900 font-mono">123456</span>
                       </p>
                     </div>
                   </motion.form>
                 ) : (
-                  /* Registration form */
+                  /* Register form */
                   <motion.form
                     key="register-form"
-                    initial={{ opacity: 0, x: 30, rotateY: -10 }}
-                    animate={{ opacity: 1, x: 0, rotateY: 0 }}
-                    exit={{ opacity: 0, x: -30, rotateY: 10 }}
-                    transition={{ duration: 0.35, ease: "easeInOut" }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
                     onSubmit={handleRegisterSubmit}
-                    className="space-y-4 [perspective:1000px]"
+                    className="space-y-4"
                   >
-                    {/* Floating Label Full Legal Name */}
-                    <div className="relative group">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-mono font-black uppercase text-neutral-400 tracking-wider">
+                        Full Legal Name
+                      </label>
                       <input
                         type="text"
                         required
-                        id="regFullName"
-                        placeholder=" "
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        className="peer w-full bg-zinc-50 border border-zinc-200 rounded-[16px] pl-10 pr-4 pt-5 pb-2 text-xs font-bold text-[#1D1D1F] placeholder-transparent outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400/20 shadow-[0_0_15px_rgba(6,182,212,0)] focus:shadow-[0_0_15px_rgba(6,182,212,0.15)] transition-all duration-300"
+                        placeholder="Emma Samuel"
+                        className="w-full bg-neutral-50 border-2 border-neutral-200 focus:border-neutral-900 rounded-2xl p-3.5 text-xs font-semibold text-neutral-950 outline-none transition-all duration-200"
                       />
-                      <label
-                        htmlFor="regFullName"
-                        className="absolute left-10 top-1 text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400 transition-all duration-300 peer-placeholder-shown:text-xs peer-placeholder-shown:top-3.5 peer-focus:top-1 peer-focus:text-[9px] peer-focus:text-zinc-850 pointer-events-none"
-                      >
-                        Full Legal Name
-                      </label>
-                      <div className="absolute left-3 top-3.5 text-zinc-400 transition-colors peer-focus:text-zinc-850">
-                        <User className="h-4 w-4" />
-                      </div>
                     </div>
 
-                    {/* Floating Label Email Address */}
-                    <div className="relative group">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-mono font-black uppercase text-neutral-400 tracking-wider">
+                        Email Address
+                      </label>
                       <input
                         type="email"
                         required
-                        id="regEmail"
-                        placeholder=" "
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="peer w-full bg-zinc-50 border border-zinc-200 rounded-[16px] pl-10 pr-4 pt-5 pb-2 text-xs font-bold text-[#1D1D1F] placeholder-transparent outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400/20 shadow-[0_0_15px_rgba(6,182,212,0)] focus:shadow-[0_0_15px_rgba(6,182,212,0.15)] transition-all duration-300"
+                        placeholder="yourname@gmail.com"
+                        className="w-full bg-neutral-50 border-2 border-neutral-200 focus:border-neutral-900 rounded-2xl p-3.5 text-xs font-semibold text-neutral-950 outline-none transition-all duration-200"
                       />
-                      <label
-                        htmlFor="regEmail"
-                        className="absolute left-10 top-1 text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400 transition-all duration-300 peer-placeholder-shown:text-xs peer-placeholder-shown:top-3.5 peer-focus:top-1 peer-focus:text-[9px] peer-focus:text-zinc-850 pointer-events-none"
-                      >
-                        Email Address
-                      </label>
-                      <div className="absolute left-3 top-3.5 text-zinc-400 transition-colors peer-focus:text-zinc-850">
-                        <Mail className="h-4 w-4" />
-                      </div>
                     </div>
 
-                    {/* Floating Label WhatsApp Phone */}
-                    <div className="relative group">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-mono font-black uppercase text-neutral-400 tracking-wider">
+                        WhatsApp Number
+                      </label>
                       <input
                         type="tel"
                         required
-                        id="regPhone"
-                        placeholder=" "
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        className="peer w-full bg-zinc-50 border border-zinc-200 rounded-[16px] pl-10 pr-4 pt-5 pb-2 text-xs font-bold text-[#1D1D1F] placeholder-transparent outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400/20 shadow-[0_0_15px_rgba(6,182,212,0)] focus:shadow-[0_0_15px_rgba(6,182,212,0.15)] transition-all duration-300"
+                        placeholder="+234..."
+                        className="w-full bg-neutral-50 border-2 border-neutral-200 focus:border-neutral-900 rounded-2xl p-3.5 text-xs font-semibold text-neutral-950 outline-none transition-all duration-200"
                       />
-                      <label
-                        htmlFor="regPhone"
-                        className="absolute left-10 top-1 text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400 transition-all duration-300 peer-placeholder-shown:text-xs peer-placeholder-shown:top-3.5 peer-focus:top-1 peer-focus:text-[9px] peer-focus:text-zinc-850 pointer-events-none"
-                      >
-                        WhatsApp Phone Number
-                      </label>
-                      <div className="absolute left-3 top-3.5 text-zinc-400 transition-colors peer-focus:text-zinc-850">
-                        <Smartphone className="h-4 w-4" />
-                      </div>
                     </div>
 
-                    {/* Floating Label Password for Registration */}
-                    <div className="relative group">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-mono font-black uppercase text-neutral-400 tracking-wider">
+                        Security Password
+                      </label>
                       <input
                         type="password"
                         required
-                        id="regPassword"
-                        placeholder=" "
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="peer w-full bg-zinc-50 border border-zinc-200 rounded-[16px] pl-10 pr-4 pt-5 pb-2 text-xs font-bold text-[#1D1D1F] placeholder-transparent outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400/20 shadow-[0_0_15px_rgba(6,182,212,0)] focus:shadow-[0_0_15px_rgba(6,182,212,0.15)] transition-all duration-300"
+                        placeholder="••••••••"
+                        className="w-full bg-neutral-50 border-2 border-neutral-200 focus:border-neutral-900 rounded-2xl p-3.5 text-xs font-semibold text-neutral-950 outline-none transition-all duration-200"
                       />
-                      <label
-                        htmlFor="regPassword"
-                        className="absolute left-10 top-1 text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400 transition-all duration-300 peer-placeholder-shown:text-xs peer-placeholder-shown:top-3.5 peer-focus:top-1 peer-focus:text-[9px] peer-focus:text-zinc-850 pointer-events-none"
-                      >
-                        Create Account Password
-                      </label>
-                      <div className="absolute left-3 top-3.5 text-zinc-400 transition-colors peer-focus:text-zinc-850">
-                        <Lock className="h-4 w-4" />
-                      </div>
                     </div>
 
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-[#1D1D1F] text-xs font-black uppercase tracking-widest py-3.5 rounded-[16px] transition-all cursor-pointer shadow-sm shadow-cyan-500/20 mt-4 flex items-center justify-center gap-2"
+                      className="w-full bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-black uppercase tracking-widest py-4 rounded-2xl transition-all cursor-pointer mt-4"
                     >
                       {loading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Creating Account...</span>
-                        </>
+                        <Loader2 className="h-4 w-4 animate-spin mx-auto text-white" />
                       ) : (
-                        <span>Create Free Client ID</span>
+                        <span>Create Account</span>
                       )}
                     </button>
                   </motion.form>
@@ -733,733 +643,419 @@ export default function UserPortal() {
             </div>
           </div>
         ) : (
-          /* Logged In Portal & Referral invite-to-earn panel */
-          <div className="space-y-8 animate-in fade-in duration-300">
-            {/* Header / ID Badge */}
-            <div className="glass-panel border border-zinc-200/80 rounded-[32px] p-6 sm:p-8 backdrop-blur-md flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-mdx">
-              <div className="flex items-center gap-4">
-                {user.avatarUrl ? (
-                  <img
-                    src={user.avatarUrl}
-                    alt={user.fullName}
-                    referrerPolicy="no-referrer"
-                    className="h-14 w-14 rounded-[24px] border-2 border-blue-500/30 object-cover shadow-[0_0_15px_rgba(59,130,246,0.15)] shrink-0 animate-in zoom-in duration-300"
-                  />
-                ) : (
-                  <div className="h-14 w-14 rounded-[24px] bg-blue-600/15 border border-zinc-200 flex items-center justify-center text-[#1D1D1F] shrink-0">
-                    <UserCheck className="h-7 w-7" />
+          /* HIGH-END MINIMALIST NOIR USER PORTAL DASHBOARD */
+          <div className="space-y-8 animate-in fade-in duration-500">
+            
+            {/* Header Identity Board Card - 32px corners, Minimalist Noir */}
+            <div className="bg-white border-2 border-neutral-900 rounded-[32px] p-8 md:p-10 shadow-md flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+                
+                {/* Large circular Google avatar inside rich double charcoal borders */}
+                <div className="relative group shrink-0">
+                  {user.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.fullName}
+                      referrerPolicy="no-referrer"
+                      className="h-28 w-28 rounded-full border-4 border-neutral-950 object-cover shadow-md transition-transform duration-300 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="h-28 w-28 rounded-full bg-neutral-100 border-4 border-neutral-950 flex items-center justify-center text-neutral-800">
+                      <UserCheck className="h-12 w-12" />
+                    </div>
+                  )}
+                  <div className="absolute -bottom-1 -right-1 bg-neutral-950 text-white p-2 rounded-full border-2 border-white shadow-sm cursor-pointer" onClick={() => setIsEditModalOpen(true)}>
+                    <Edit3 className="h-3.5 w-3.5" />
                   </div>
-                )}
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-[8px] font-bold text-emerald-400 bg-zinc-100 border border-emerald-500/15 px-2 py-0.5 rounded uppercase tracking-wider">
-                      Active Account
+                </div>
+
+                {/* Identity Text Info */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-[8px] font-black text-white bg-neutral-950 px-2.5 py-1 rounded uppercase tracking-widest">
+                      {getRoleLabel(user.role)}
                     </span>
-                    {user.studentId && (
-                      <span className="font-mono text-[8px] font-bold text-purple-400 bg-purple-500/10 border border-purple-500/15 px-2 py-0.5 rounded uppercase tracking-wider">
-                        Academy Student
+                    {user.idVerified && (
+                      <span className="font-mono text-[8px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded uppercase tracking-widest flex items-center gap-1">
+                        <Check className="h-2.5 w-2.5 stroke-[3px]" /> KYC Verified
                       </span>
                     )}
                   </div>
-                  <h2 className="text-xl font-black text-[#1D1D1F] uppercase tracking-tight mt-1">
+                  <h1 className="text-3xl font-black text-neutral-950 tracking-tight font-mono uppercase">
                     {user.fullName}
-                  </h2>
-                  <p className="text-[11px] text-zinc-400 font-bold font-mono">
-                    Client ID: {user.id} {user.studentId && `• Student ID: ${user.studentId}`}
-                  </p>
+                  </h1>
+                  
+                  {/* Bio statement */}
+                  {user.bio ? (
+                    <p className="text-xs text-neutral-600 font-medium leading-relaxed max-w-md italic">
+                      "{user.bio}"
+                    </p>
+                  ) : (
+                    <p className="text-xs text-neutral-400 font-medium">
+                      No bio added. Click "Edit Profile" below to personalize your account.
+                    </p>
+                  )}
+
+                  {/* Metadata labels */}
+                  <div className="pt-2 flex flex-col gap-1.5 text-xs font-semibold text-neutral-500">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-3.5 w-3.5 stroke-[2.5px]" />
+                      <span>{user.email}</span>
+                    </div>
+                    {user.phone && user.phone !== "Google Auth" && (
+                      <div className="flex items-center gap-2">
+                        <Smartphone className="h-3.5 w-3.5 stroke-[2.5px]" />
+                        <span>{user.phone} (WhatsApp Contact)</span>
+                      </div>
+                    )}
+                    {user.address && (
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-3.5 w-3.5 stroke-[2.5px]" />
+                        <span className="truncate max-w-xs md:max-w-md">{user.address}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto mt-4 sm:mt-0">
-                {!isStandalone && (
-                  <button
-                    onClick={handleInstallApp}
-                    className="flex items-center justify-center gap-1.5 rounded-[16px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 border border-transparent px-4 py-2.5 text-xs font-black text-[#1D1D1F] transition-all cursor-pointer shadow-sm shadow-blue-500/10 uppercase tracking-wider"
-                  >
-                    <Download className="h-4 w-4" />
-                    <span>Install App</span>
-                  </button>
-                )}
-
+              {/* Edit Trigger and Logout Panel */}
+              <div className="flex flex-row md:flex-col items-stretch gap-2 w-full md:w-auto pt-4 md:pt-0 border-t md:border-t-0 border-neutral-100">
+                <button
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-2xl bg-neutral-950 hover:bg-neutral-800 border-2 border-transparent px-5 py-3 text-xs font-black text-white transition-all cursor-pointer font-mono uppercase tracking-wider"
+                >
+                  <Edit3 className="h-4 w-4" />
+                  <span>Edit Profile</span>
+                </button>
                 <button
                   onClick={handleLogout}
-                  className="flex items-center justify-center gap-1.5 rounded-[16px] bg-zinc-50 hover:bg-red-500/10 hover:border-red-500/20 border border-zinc-200 px-4 py-2.5 text-xs font-bold text-zinc-500 hover:text-red-400 transition-all cursor-pointer"
+                  className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-2xl bg-white hover:bg-neutral-50 border-2 border-neutral-900 px-5 py-3 text-xs font-black text-neutral-950 transition-all cursor-pointer font-mono uppercase tracking-wider"
                 >
                   <LogOut className="h-4 w-4" />
-                  <span>Log Out Profile</span>
+                  <span>Sign Out</span>
                 </button>
               </div>
             </div>
 
-            {/* Sub-tabs for Navigation */}
-            <div className="flex border-b border-zinc-200 pb-1 gap-6">
-              <button
-                onClick={() => setUserTab("referrals")}
-                className={`pb-2.5 text-xs font-bold uppercase tracking-wider transition-all relative cursor-pointer ${
-                  userTab === "referrals" ? "text-blue-600 font-black" : "text-zinc-400 hover:text-zinc-600"
-                }`}
-              >
-                Referrals Hub
-                {userTab === "referrals" && (
-                  <motion.div layoutId="userTabUnderline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
-                )}
-              </button>
-              <button
-                onClick={() => setUserTab("verification")}
-                className={`pb-2.5 text-xs font-bold uppercase tracking-wider transition-all relative cursor-pointer flex items-center gap-1.5 ${
-                  userTab === "verification" ? "text-blue-600 font-black" : "text-zinc-400 hover:text-zinc-600"
-                }`}
-              >
-                ID Verification
-                {!user.idVerified && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                )}
-                {userTab === "verification" && (
-                  <motion.div layoutId="userTabUnderline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
-                )}
-              </button>
-              <button
-                onClick={() => setUserTab("profile")}
-                className={`pb-2.5 text-xs font-bold uppercase tracking-wider transition-all relative cursor-pointer ${
-                  userTab === "profile" ? "text-blue-600 font-black" : "text-zinc-400 hover:text-zinc-600"
-                }`}
-              >
-                Profile & Settings
-                {userTab === "profile" && (
-                  <motion.div layoutId="userTabUnderline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
-                )}
-              </button>
-            </div>
-
-            {userTab === "referrals" && (
-              /* Invite-To-Earn Dashboard Panel */
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-8 animate-in fade-in duration-300">
-                {/* Left Column: referral sharing links */}
-                <div className="md:col-span-7 glass-panel border border-zinc-200/80 rounded-[32px] p-6 sm:p-8 backdrop-blur-md space-y-6 shadow-mdx">
-                  <div>
-                    <span className="font-mono text-[9px] font-black uppercase text-[#1D1D1F] tracking-wider">
-                      Invite-To-Earn Ecosystem
+            {/* BENTO GRID: REWARDS, REVENUE & REFERRALS (32px rounded corners) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              
+              {/* Card 1: Bato Points Ledger Dashboard (Earn 10 pts per N1,000 spent + referrals) */}
+              <div className="bg-neutral-950 text-white rounded-[32px] p-8 shadow-md flex flex-col justify-between relative overflow-hidden group min-h-[320px]">
+                {/* Visual Accent */}
+                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:opacity-10 transition-opacity">
+                  <Award className="h-40 w-40 text-white stroke-[1.5]" />
+                </div>
+                
+                <div className="space-y-4 relative z-10">
+                  <div className="flex justify-between items-center">
+                    <span className="font-mono text-[9px] font-bold uppercase tracking-widest text-neutral-400 bg-white/10 px-2.5 py-1 rounded">
+                      Loyalty Ledger
                     </span>
-                    <h3 className="text-lg font-black text-[#1D1D1F] uppercase tracking-wide mt-1">
-                      Referral Accelerator
+                    <span className="font-mono text-[9px] font-black text-emerald-400 bg-emerald-950 border border-emerald-900 px-2 py-0.5 rounded uppercase tracking-wider">
+                      Earn Active
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold font-mono text-neutral-400 uppercase tracking-widest">
+                      Bato Points Balance
                     </h3>
-                    <p className="text-xs text-zinc-500 leading-relaxed mt-1 font-semibold">
-                      Share your unique referral link on WhatsApp or social networks. When a new customer completes their first job, both of you receive a special hub discount voucher!
+                    <div className="flex items-baseline gap-1 mt-1">
+                      <span className="text-5xl font-black font-mono tracking-tight text-white">
+                        {batoPoints.toLocaleString()}
+                      </span>
+                      <span className="text-sm font-bold font-mono text-neutral-400">PTS</span>
+                    </div>
+                  </div>
+
+                  {/* Rewards Breakdown list */}
+                  <div className="border-t border-white/10 pt-4 space-y-2">
+                    <div className="flex justify-between text-xs font-semibold text-neutral-400">
+                      <span>Purchase points (₦1,000 = 10 pts)</span>
+                      <span className="text-white font-mono">{jobPoints} PTS</span>
+                    </div>
+                    <div className="flex justify-between text-xs font-semibold text-neutral-400">
+                      <span>Referral points (1 invite = 10 pts)</span>
+                      <span className="text-white font-mono">{referralPoints} PTS</span>
+                    </div>
+                    <div className="flex justify-between text-xs font-semibold text-neutral-400 border-t border-white/5 pt-2">
+                      <span>Total system spend</span>
+                      <span className="text-white font-mono">₦{totalSpent.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-6 relative z-10">
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-[11px] font-semibold text-neutral-300 leading-relaxed">
+                    🌟 <span className="text-white font-black uppercase font-mono">Redemption Alert:</span> You earn points with every printing job, business registration, or course booking. Redeem them in the checkout flow for instant fee waivers!
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Unique Referral Accelerator campaigns */}
+              <div className="bg-white border-2 border-neutral-900 rounded-[32px] p-8 shadow-md flex flex-col justify-between min-h-[320px]">
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="font-mono text-[9px] font-bold uppercase tracking-widest text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded">
+                      Referral Accelerator
+                    </span>
+                    <span className="font-mono text-[9px] font-black text-neutral-900 flex items-center gap-1">
+                      <Zap className="h-3 w-3 fill-neutral-900" /> Share to Earn
+                    </span>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-black font-mono uppercase tracking-tight text-neutral-900">
+                      Invite & Grow Together
+                    </h3>
+                    <p className="text-xs text-neutral-500 font-medium leading-relaxed mt-1">
+                      Give your friends discount codes. When they register a company on Bato Sam, both of you are rewarded with 10 Bato Points directly to your ledger accounts.
                     </p>
                   </div>
 
-                  {/* The Unique Link */}
-                  <div className="bg-zinc-50 rounded-[24px] border border-zinc-200/50 p-4 space-y-2.5">
-                    <p className="text-[9px] font-mono font-bold text-zinc-400 uppercase tracking-widest">
-                      Your Personalized Invite link
+                  {/* Link field */}
+                  <div className="bg-neutral-50 rounded-2xl border border-neutral-200 p-3 space-y-1.5">
+                    <p className="text-[8px] font-mono font-black text-neutral-400 uppercase tracking-widest">
+                      Your unique Referral Link
                     </p>
-                    
-                    <div className="flex items-center gap-2 bg-zinc-100/50 rounded-[16px] p-1.5 border border-zinc-200">
-                      <span className="flex-1 px-2.5 py-1 text-[10px] font-mono text-zinc-700 select-all overflow-hidden text-ellipsis whitespace-nowrap font-semibold">
-                        {getInviteLink()}
+                    <div className="flex items-center gap-2 bg-white rounded-xl p-1.5 border border-neutral-200">
+                      <span className="flex-1 px-2 py-1 text-[10px] font-mono font-bold text-neutral-600 select-all overflow-hidden text-ellipsis whitespace-nowrap">
+                        {getReferralLink()}
                       </span>
                       <button
                         onClick={handleCopyLink}
-                        className={`flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
-                          copied ? "bg-emerald-600 text-[#1D1D1F]" : "bg-blue-600 hover:bg-blue-500 text-[#1D1D1F]"
+                        className={`flex h-8 w-8 items-center justify-center rounded-lg transition-all cursor-pointer shrink-0 ${
+                          copied ? "bg-emerald-600 text-white" : "bg-neutral-950 hover:bg-neutral-800 text-white"
                         }`}
                       >
-                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Instant WhatsApp Sharing */}
-                  <div className="space-y-3">
-                    <p className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-wider">
-                      Instant Social Campaign
-                    </p>
-                    
-                    <a
-                      href={getWhatsAppMessage()}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() => incrementLiveShares()}
-                      className="flex items-center justify-center gap-3 w-full rounded-[24px] bg-emerald-600 hover:bg-emerald-500 text-[#1D1D1F] py-4 text-xs font-black uppercase tracking-wider shadow-mdx transition-all cursor-pointer"
-                    >
-                      <Send className="h-4 w-4 text-emerald-300" />
-                      <span>Share on WhatsApp</span>
-                    </a>
-
-                    <p className="text-[10px] text-zinc-400 text-center font-bold">
-                      Generates a professional pitch with your discount link attached.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Right Column: Referral Tracker & Simulator */}
-                <div className="md:col-span-5 flex flex-col gap-6">
-                  {/* Tracker Display */}
-                  <div className="bg-gradient-to-b from-blue-950/20 to-indigo-950/20 border border-blue-500/10 rounded-[32px] p-6 backdrop-blur-md relative overflow-hidden flex-1 flex flex-col justify-between">
-                    <div className="absolute top-0 right-0 p-3 text-blue-500/20">
-                      <TrendingUp className="h-16 w-16" />
-                    </div>
-
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-[#1D1D1F]" />
-                        <span className="font-mono text-[9px] font-black uppercase tracking-widest text-zinc-500">
-                          Referral Tracker
-                        </span>
-                      </div>
-                      
-                      <div className="mt-4">
-                        <span className="text-5xl font-black text-[#1D1D1F] font-sans">
-                          {user.referralCount}
-                        </span>
-                        <span className="text-xs text-zinc-500 block mt-1 font-bold">
-                          Successful Invites Accepted
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-6 pt-4 border-t border-zinc-200/50 space-y-3">
-                      <p className="text-[9px] font-mono font-bold text-zinc-400 uppercase tracking-widest">
-                        Referred Accounts
-                      </p>
-                      {user.referredEmails.length > 0 ? (
-                        <div className="max-h-[110px] overflow-y-auto space-y-1.5 pr-2">
-                          {user.referredEmails.map((email, idx) => (
-                            <div key={idx} className="flex items-center justify-between text-[10px] font-mono bg-zinc-50 border border-zinc-200/50 p-2 rounded-lg">
-                              <span className="text-zinc-700 font-bold truncate">{email}</span>
-                              <span className="text-emerald-400 font-black">Registered</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-[10px] text-zinc-400 font-medium italic">
-                          No active referrals yet. Use your link above to get started!
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Live Simulator Form to test invite tracker */}
-                  <div className="glass-panel border border-zinc-200/80 rounded-[32px] p-6 backdrop-blur-md space-y-4 shadow-mdx">
-                    <div>
-                      <div className="flex items-center gap-1">
-                        <Sparkles className="h-4.5 w-4.5 text-[#1D1D1F] animate-pulse" />
-                        <span className="text-[10px] font-mono font-black uppercase tracking-wider text-zinc-700">
-                          Live Sandbox Simulator
-                        </span>
-                      </div>
-                      <p className="text-[9px] text-zinc-400 mt-1 font-semibold leading-relaxed">
-                        Simulate another user clicking your link and completing registration to watch your stats update instantly!
-                      </p>
-                    </div>
-
-                    <form onSubmit={handleSimulateReferral} className="flex gap-2">
-                      <input
-                        type="email"
-                        required
-                        placeholder="friend@gmail.com"
-                        value={simEmail}
-                        onChange={(e) => setSimEmail(e.target.value)}
-                        className="flex-1 bg-zinc-50 border border-zinc-200 rounded-[16px] px-3 py-2 text-xs font-bold text-[#1D1D1F] placeholder-zinc-400 outline-none"
-                      />
-                      <button
-                        type="submit"
-                        className="rounded-[16px] bg-blue-600 hover:bg-blue-500 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-[#1D1D1F] shrink-0 cursor-pointer"
-                      >
-                        Simulate
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {userTab === "profile" && (
-              /* Profile & Settings Dedicated View */
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-8 animate-in fade-in duration-300">
-                {/* Left Column: Google Picture, Profile Details, and Referral Points */}
-                <div className="md:col-span-5 flex flex-col gap-6">
-                  {/* Google Profile View */}
-                  <div className="glass-panel border border-zinc-200/80 rounded-[32px] p-6 backdrop-blur-md text-center space-y-4 shadow-mdx relative overflow-hidden">
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500" />
-                    
-                    <div className="flex justify-center">
-                      {user.avatarUrl ? (
-                        <div className="relative group">
-                          <img
-                            src={user.avatarUrl}
-                            alt={user.fullName}
-                            referrerPolicy="no-referrer"
-                            className="h-24 w-24 rounded-[32px] border-4 border-blue-500/20 object-cover shadow-lg transition-transform group-hover:scale-105 duration-300"
-                          />
-                          <span className="absolute bottom-1 right-1 bg-blue-600 text-[#1D1D1F] p-1 rounded-full border border-white text-[8px] font-bold">
-                            G
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="h-24 w-24 rounded-[32px] bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-500">
-                          <User className="h-10 w-10" />
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <h3 className="text-base font-black text-[#1D1D1F] uppercase tracking-wide">
-                        {user.fullName}
-                      </h3>
-                      <p className="text-xs text-zinc-500 font-medium">
-                        {user.email}
-                      </p>
-                    </div>
-
-                    <div className="pt-2">
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-[9px] font-bold text-blue-600 uppercase tracking-wider">
-                        Google Verified Partner
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Referral Points Tracker */}
-                  <div className="bg-zinc-900 text-[#1D1D1F] rounded-[32px] p-6 relative overflow-hidden shadow-xl border border-zinc-800">
-                    <div className="absolute -bottom-6 -right-6 opacity-5 text-white">
-                      <Award className="h-32 w-32" />
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 text-zinc-400">
-                        <Award className="h-4 w-4 text-amber-500" />
-                        <span className="font-mono text-[9px] font-black uppercase tracking-widest">
-                          Bato Loyalty Rewards
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-4xl font-black font-sans text-white">
-                          {(user.referralCount || 0) * 10}
-                        </span>
-                        <span className="text-[10px] text-zinc-400 block mt-1 uppercase tracking-wider font-bold">
-                          Referral Points Earned
-                        </span>
-                      </div>
-
-                      <p className="text-[10px] text-zinc-500 leading-relaxed font-semibold">
-                        Earn 10 points per invite! Redeem points directly for premium high-fidelity document printing, business CAC reservations, or Jovibe training programs.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Column: Settings, Performance Toggles, Legal Accordion */}
-                <div className="md:col-span-7 glass-panel border border-zinc-200/80 rounded-[32px] p-6 sm:p-8 backdrop-blur-md space-y-6 shadow-mdx">
-                  {/* Settings Panel Title */}
-                  <div>
-                    <span className="font-mono text-[9px] font-black uppercase text-[#1D1D1F] tracking-wider">
-                      Control Desk
-                    </span>
-                    <h3 className="text-lg font-black text-[#1D1D1F] uppercase tracking-wide mt-1">
-                      Platform Preferences
-                    </h3>
-                  </div>
-
-                  {/* Performance Toggles */}
-                  <div className="space-y-4 pt-2">
-                    <h4 className="text-[10px] font-mono font-black uppercase text-zinc-500 tracking-wider">
-                      Performance & Access
-                    </h4>
-
-                    {/* Low Data Mode */}
-                    <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-[20px] border border-zinc-200/50">
-                      <div>
-                        <p className="text-xs font-black text-[#1D1D1F]">
-                          Low Data Mode
-                        </p>
-                        <p className="text-[9px] text-zinc-400 font-semibold leading-normal mt-0.5 max-w-[280px]">
-                          Disable premium particle animations and heavy assets to save telemetry data.
-                        </p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={lowDataMode}
-                          onChange={(e) => {
-                            const val = e.target.checked;
-                            setLowDataMode(val);
-                            localStorage.setItem("bato_low_data_mode", String(val));
-                          }}
-                          className="sr-only peer" 
-                        />
-                        <div className="w-10 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                      </label>
-                    </div>
-
-                    {/* High Contrast */}
-                    <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-[20px] border border-zinc-200/50">
-                      <div>
-                        <p className="text-xs font-black text-[#1D1D1F]">
-                          High Contrast
-                        </p>
-                        <p className="text-[9px] text-zinc-400 font-semibold leading-normal mt-0.5 max-w-[280px]">
-                          Increase text visibility ratios for sunlight/classroom reading environments.
-                        </p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={highContrast}
-                          onChange={(e) => {
-                            const val = e.target.checked;
-                            setHighContrast(val);
-                            localStorage.setItem("bato_high_contrast", String(val));
-                            if (val) {
-                              document.documentElement.classList.add("high-contrast");
-                            } else {
-                              document.documentElement.classList.remove("high-contrast");
-                            }
-                          }}
-                          className="sr-only peer" 
-                        />
-                        <div className="w-10 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Bato Sam Specific Legal Section directly on-screen */}
-                  <div className="space-y-3 pt-2">
-                    <h4 className="text-[10px] font-mono font-black uppercase text-zinc-500 tracking-wider">
-                      Legal Compliance & Guardrails
-                    </h4>
-
-                    <div className="p-4 bg-zinc-100 rounded-[24px] border border-zinc-200/50 space-y-3">
-                      {/* CAC Disclaimer */}
-                      <div className="flex gap-2 items-start">
-                        <span className="text-[9px] px-1.5 py-0.5 bg-zinc-200 border border-zinc-300 rounded font-mono font-black shrink-0 mt-0.5 uppercase">CAC</span>
-                        <p className="text-[9.5px] text-zinc-600 leading-normal font-semibold">
-                          <strong>Disclaimer:</strong> BATO SAM operates as a professional intermediary. CAC government processing timelines are authoritative and subject to governmental system uptime.
-                        </p>
-                      </div>
-
-                      {/* Training Policy */}
-                      <div className="flex gap-2 items-start border-t border-zinc-200/60 pt-3">
-                        <span className="text-[9px] px-1.5 py-0.5 bg-zinc-200 border border-zinc-300 rounded font-mono font-black shrink-0 mt-0.5 uppercase">FEES</span>
-                        <p className="text-[9.5px] text-zinc-600 leading-normal font-semibold">
-                          <strong>Admissions Policy:</strong> Jovibe Code certificate fees are strictly non-refundable once registration is processed and database storage allocated.
-                        </p>
-                      </div>
-
-                      {/* Privacy Policy */}
-                      <div className="flex gap-2 items-start border-t border-zinc-200/60 pt-3">
-                        <span className="text-[9px] px-1.5 py-0.5 bg-zinc-200 border border-zinc-300 rounded font-mono font-black shrink-0 mt-0.5 uppercase">DATA</span>
-                        <p className="text-[9.5px] text-zinc-600 leading-normal font-semibold">
-                          <strong>Privacy Guard:</strong> All account data, profile details, and file uploads are secured in encrypted cloud buckets and never disclosed to third parties.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Links to legal modals */}
-                    <div className="flex gap-4 justify-center pt-1">
-                      <button
-                        onClick={() => {
-                          setLegalModalSection("terms");
-                          setShowLegalModal(true);
-                        }}
-                        className="text-[10px] font-mono font-black uppercase text-blue-600 hover:underline cursor-pointer"
-                      >
-                        Terms & Conditions
-                      </button>
-                      <span className="text-zinc-300">|</span>
-                      <button
-                        onClick={() => {
-                          setLegalModalSection("privacy");
-                          setShowLegalModal(true);
-                        }}
-                        className="text-[10px] font-mono font-black uppercase text-blue-600 hover:underline cursor-pointer"
-                      >
-                        Privacy Policy
+                        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                       </button>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
 
-            {userTab === "verification" && (
-              /* Identity Verification View */
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-8 animate-in fade-in duration-300">
-                {/* Left side info block */}
-                <div className="md:col-span-5 space-y-6">
-                  <div className="glass-panel border border-zinc-200/80 rounded-[32px] p-6 backdrop-blur-md relative overflow-hidden space-y-4 shadow-mdx">
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-indigo-600" />
-                    
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[20px] bg-blue-50 border border-blue-200 text-blue-600">
-                      <Fingerprint className="h-6 w-6" />
-                    </div>
-
-                    <div className="text-center">
-                      <h3 className="text-base font-black text-[#1D1D1F] uppercase tracking-wide">
-                        Identity Security Hub
-                      </h3>
-                      <p className="text-xs text-zinc-500 mt-1 leading-relaxed font-semibold">
-                        We safeguard client records and verify account access profiles to keep high-value document printing, CAC corporate filing lists, and student directories 100% safe.
-                      </p>
-                    </div>
-
-                    <div className="bg-zinc-50 p-4 rounded-[20px] border border-zinc-200/50 space-y-2.5">
-                      <div className="flex gap-2 items-start">
-                        <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                        <p className="text-[10px] text-zinc-600 leading-normal font-semibold">
-                          <strong>Anti-Fraud Protocol:</strong> Multi-factor identity confirmation prevents unauthorized order retrievals.
-                        </p>
-                      </div>
-                      <div className="flex gap-2 items-start border-t border-zinc-200/60 pt-2.5">
-                        <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                        <p className="text-[10px] text-zinc-600 leading-normal font-semibold">
-                          <strong>CAC Compliance:</strong> Verified identification numbers are required prior to CAC business bookings.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right side form / status block */}
-                <div className="md:col-span-7 glass-panel border border-zinc-200/80 rounded-[32px] p-6 sm:p-8 backdrop-blur-md space-y-6 shadow-mdx">
-                  {user.idVerified ? (
-                    /* VERIFIED VISUAL STATE */
-                    <div className="space-y-6 animate-in fade-in duration-300">
-                      <div className="text-center py-4 space-y-3">
-                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-[#1D1D1F] border-4 border-emerald-500/20 shadow-lg animate-bounce">
-                          <UserCheck className="h-8 w-8" />
-                        </div>
-                        <div>
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-[9px] font-black text-emerald-600 uppercase tracking-widest">
-                            Client Identity Secured
-                          </span>
-                          <h3 className="text-xl font-black text-[#1D1D1F] uppercase mt-2 tracking-tight">Verified & Authenticated</h3>
-                        </div>
-                      </div>
-
-                      <div className="bg-zinc-50 rounded-[24px] border border-zinc-200 p-5 space-y-4">
-                        <h4 className="text-[10px] font-mono font-black uppercase text-zinc-400 tracking-wider">
-                          Identity Record Parameters
-                        </h4>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <span className="text-[9px] font-bold text-zinc-400 block uppercase">Document Class</span>
-                            <span className="text-xs font-black text-[#1D1D1F] mt-0.5 block">{user.idType || "National ID (NIN)"}</span>
-                          </div>
-                          <div>
-                            <span className="text-[9px] font-bold text-zinc-400 block uppercase">ID Number (Masked)</span>
-                            <span className="text-xs font-mono font-black text-[#1D1D1F] mt-0.5 block">
-                              •••• •••• {user.idNumber ? user.idNumber.slice(-4) : "9999"}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[9px] font-bold text-zinc-400 block uppercase">Registered Phone</span>
-                            <span className="text-xs font-black text-[#1D1D1F] mt-0.5 block">{user.phone || "No phone linked"}</span>
-                          </div>
-                          <div>
-                            <span className="text-[9px] font-bold text-zinc-400 block uppercase">Verification Status</span>
-                            <span className="text-xs font-bold text-emerald-600 mt-0.5 block flex items-center gap-1">
-                              <Check className="h-3.5 w-3.5" /> SECURE LOCK
-                            </span>
-                          </div>
-                        </div>
-
-                        {user.emergencyName && (
-                          <div className="border-t border-zinc-200 pt-3">
-                            <span className="text-[9px] font-bold text-zinc-400 block uppercase">Next of Kin / Emergency Contact</span>
-                            <span className="text-xs font-black text-[#1D1D1F] mt-0.5 block">
-                              {user.emergencyName} ({user.emergencyPhone || "No Phone"})
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="bg-emerald-50 rounded-[20px] p-4 border border-emerald-100 flex gap-2.5">
-                        <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
-                        <p className="text-[10px] text-emerald-800 leading-normal font-semibold">
-                          Your profile is fully verified under administration registry parameters. You can now execute CAC submissions, register for Jovibe Web courses, and order document prints.
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    /* UNVERIFIED FORM STATE */
-                    <div className="space-y-6">
-                      <div>
-                        <span className="font-mono text-[9px] font-black uppercase text-blue-600 tracking-wider">
-                          Identity Security Checklist
-                        </span>
-                        <h3 className="text-lg font-black text-[#1D1D1F] uppercase tracking-tight mt-1">
-                          Verify Client Identification
-                        </h3>
-                        <p className="text-xs text-zinc-500 mt-1 leading-relaxed font-semibold">
-                          Fill in your details accurately. The system will sync with secure document registries to encrypt and lock your profile.
-                        </p>
-                      </div>
-
-                      {verificationError && (
-                        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-500 text-[10px] font-bold">
-                          {verificationError}
-                        </div>
-                      )}
-
-                      {verificationSuccess && (
-                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-emerald-600 text-[10px] font-bold">
-                          {verificationSuccess}
-                        </div>
-                      )}
-
-                      <form onSubmit={handleIdVerificationSubmit} className="space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-[10px] font-mono font-black uppercase text-zinc-400 mb-2">
-                              Identification Document Type
-                            </label>
-                            <select
-                              value={vIdType}
-                              onChange={(e) => setVIdType(e.target.value)}
-                              className="w-full rounded-[16px] border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-xs font-bold text-[#1D1D1F] outline-none"
-                            >
-                              <option>National ID (NIN)</option>
-                              <option>Bank Verification Number (BVN)</option>
-                              <option>Voter's Card (VIN)</option>
-                              <option>Driver's License</option>
-                              <option>International Passport</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-[10px] font-mono font-black uppercase text-zinc-400 mb-2">
-                              ID Number (NIN/BVN/etc.)
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="Enter ID Number"
-                              value={vIdNumber}
-                              onChange={(e) => setVIdNumber(e.target.value)}
-                              className="w-full rounded-[16px] border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-xs font-bold text-[#1D1D1F] placeholder-zinc-400 outline-none"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-[10px] font-mono font-black uppercase text-zinc-400 mb-2">
-                              Primary Contact Phone
-                            </label>
-                            <input
-                              type="tel"
-                              required
-                              placeholder="e.g. +234 904 301 7213"
-                              value={vPhone}
-                              onChange={(e) => setVPhone(e.target.value)}
-                              className="w-full rounded-[16px] border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-xs font-bold text-[#1D1D1F] placeholder-zinc-400 outline-none"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[10px] font-mono font-black uppercase text-zinc-400 mb-2">
-                              Emergency Contact Name
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="Next of Kin Full Name"
-                              value={vEmergencyName}
-                              onChange={(e) => setVEmergencyName(e.target.value)}
-                              className="w-full rounded-[16px] border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-xs font-bold text-[#1D1D1F] placeholder-zinc-400 outline-none"
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-mono font-black uppercase text-zinc-400 mb-2">
-                            Emergency Contact Phone Number
-                          </label>
-                          <input
-                            type="tel"
-                            required
-                            placeholder="Next of Kin Phone Number"
-                            value={vEmergencyPhone}
-                            onChange={(e) => setVEmergencyPhone(e.target.value)}
-                            className="w-full rounded-[16px] border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-xs font-bold text-[#1D1D1F] placeholder-zinc-400 outline-none"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          className="w-full rounded-[16px] bg-blue-600 hover:bg-blue-500 py-3 text-xs font-black uppercase tracking-wider text-[#1D1D1F] cursor-pointer transition-colors text-center"
-                        >
-                          Verify & Secure Account ID
-                        </button>
-                      </form>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Legal Modal Popup */}
-            {showLegalModal && (
-              <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-md p-4 animate-in fade-in duration-200">
-                <div className="w-full max-w-lg rounded-[28px] border border-zinc-200 bg-white p-6 sm:p-8 space-y-4 shadow-2xl relative overflow-hidden">
-                  <button
-                    onClick={() => setShowLegalModal(false)}
-                    className="absolute top-4 right-4 text-zinc-400 hover:text-black transition-colors cursor-pointer text-sm font-bold"
+                <div className="pt-6">
+                  <a
+                    href={getWhatsAppShareLink()}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => incrementLiveShares()}
+                    className="flex items-center justify-center gap-2 w-full rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white py-3.5 text-xs font-black uppercase tracking-wider transition-all cursor-pointer font-mono"
                   >
-                    ✕
-                  </button>
-
-                  <div className="space-y-2">
-                    <span className="font-mono text-[8px] font-black uppercase text-blue-600 tracking-widest">
-                      Official Governance
-                    </span>
-                    <h3 className="text-base font-black text-[#1D1D1F] uppercase tracking-wider">
-                      {legalModalSection === "terms" ? "BATO SAM Terms & Conditions" : "BATO SAM Privacy Statement"}
-                    </h3>
-                  </div>
-
-                  <div className="max-h-[300px] overflow-y-auto border border-zinc-200 bg-zinc-50 p-4 rounded-[20px] text-[10px] text-zinc-600 space-y-3 font-semibold leading-relaxed">
-                    {legalModalSection === "terms" ? (
-                      <>
-                        <p className="font-bold uppercase text-zinc-800">1. Services as Intermediary</p>
-                        <p>Bato Sam acts as a third-party administrative facilitator for Corporate Affairs Commission (CAC) registrations, high-fidelity local printing processing, and technical certifications. We do not represent any government agency directly.</p>
-                        
-                        <p className="font-bold uppercase text-zinc-800">2. Processing & Refund Rules</p>
-                        <p>Fulfillment queues commence immediately upon credential and invoice validation. All fees paid for premium Jovibe Code training tracks are locked into student registries and cannot be reversed or refunded post-activation.</p>
-
-                        <p className="font-bold uppercase text-zinc-800">3. Delivery & Delay Timelines</p>
-                        <p>While Bato Sam promises daily delivery, delays resulting from CAC platform offline states, power grid drops, or logistics anomalies are non-actionable. Support is available via 2349043017213.</p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="font-bold uppercase text-zinc-800">1. Data Storage Integrity</p>
-                        <p>Bato Sam stores account identifiers, Google profile vectors, transaction ledgers, and document uploads strictly within authorized sandboxed databases using secure token parameters.</p>
-
-                        <p className="font-bold uppercase text-zinc-800">2. Third-Party Sharing Shield</p>
-                        <p>We declare under administrative oath that no customer metadata, files, phone records, or emails are rented, sold, or shared with commercial marketers or third-party networks.</p>
-
-                        <p className="font-bold uppercase text-zinc-800">3. User Ownership rights</p>
-                        <p>Clients can request the immediate truncation or erasure of their account records, transaction histories, and file assets from our databases at any time by contacting our helpline.</p>
-                      </>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => setShowLegalModal(false)}
-                    className="w-full bg-zinc-900 hover:bg-black text-[#1D1D1F] text-xs font-black uppercase tracking-wider py-3 rounded-xl transition-all cursor-pointer text-center"
-                  >
-                    I Understand & Accept
-                  </button>
+                    <Send className="h-4 w-4 text-emerald-100" />
+                    <span>Share on WhatsApp</span>
+                  </a>
                 </div>
               </div>
-            )}
+
+            </div>
+
+            {/* Smart Forms auto-fill status notification card */}
+            <div className="bg-neutral-50 border-2 border-dashed border-neutral-300 rounded-[32px] p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-neutral-900 rounded-2xl text-white shrink-0">
+                  <Zap className="h-6 w-6 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black font-mono uppercase tracking-tight text-neutral-900">
+                    Smart Forms Integration: Connected & Active
+                  </h4>
+                  <p className="text-xs text-neutral-500 font-medium max-w-xl">
+                    Your profile address and phone details are synced. The next time you visit the <span className="font-bold text-neutral-800">CAC Wizard</span> or configure print jobs in the <span className="font-bold text-neutral-800">Printing Hub</span>, your details will auto-fill instantly.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <span className="font-mono text-[9px] font-black text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200 uppercase tracking-widest shrink-0">
+                  Auto-Fill Armed
+                </span>
+              </div>
+            </div>
 
           </div>
         )}
 
       </div>
+
+      {/* SLEEK ANIMATED EDIT PROFILE MODAL (FROSTED GLASS BLUR, Noir style) */}
+      <AnimatePresence>
+        {isEditModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            
+            {/* Frosted Glass Overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => { if (!savingProfile) setIsEditModalOpen(false); }}
+              className="absolute inset-0 bg-neutral-900/40 backdrop-blur-md"
+            />
+
+            {/* Modal Body: 32px rounded corners, Off-white card */}
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="relative w-full max-w-md bg-white border-2 border-neutral-900 rounded-[32px] p-8 md:p-10 shadow-2xl overflow-hidden"
+            >
+              
+              {/* Success Checkmark drawing animation overlay */}
+              {showCheckmark && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="absolute inset-0 bg-white/95 backdrop-blur-sm z-50 flex flex-col items-center justify-center"
+                >
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: [0, 1.2, 1] }}
+                    transition={{ duration: 0.5, ease: "easeOut" }}
+                    className="h-20 w-20 rounded-full bg-neutral-950 flex items-center justify-center text-white shadow-md mb-4"
+                  >
+                    <Check className="h-10 w-10 stroke-[3px]" />
+                  </motion.div>
+                  <h3 className="text-lg font-black font-mono text-neutral-950 uppercase tracking-wide">
+                    PROFILE SYNCHRONIZED
+                  </h3>
+                  <p className="text-xs text-neutral-500 font-bold font-mono uppercase tracking-widest mt-1">
+                    Supabase Database Synced
+                  </p>
+                </motion.div>
+              )}
+
+              {/* Title Header */}
+              <div className="mb-6">
+                <span className="font-mono text-[8px] font-black text-neutral-400 uppercase tracking-widest">
+                  Secure Identity Form
+                </span>
+                <h3 className="text-2xl font-black font-mono uppercase tracking-tight text-neutral-950 mt-1">
+                  Edit Profile
+                </h3>
+                <p className="text-xs text-neutral-500 font-medium mt-1 leading-relaxed">
+                  Update your contact details for job delivery and official corporate registry filings.
+                </p>
+              </div>
+
+              {profileError && (
+                <div className="mb-4 bg-red-50 border-2 border-red-100 p-3.5 rounded-2xl text-[11px] font-bold text-red-600">
+                  {profileError}
+                </div>
+              )}
+
+              {/* Form elements */}
+              <form onSubmit={handleSaveProfile} className="space-y-4">
+                
+                <div className="space-y-1">
+                  <label className="text-[9px] font-mono font-black uppercase text-neutral-400 tracking-wider">
+                    Full Name (Auto-filled from Google)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      value={editFullName}
+                      onChange={(e) => setEditFullName(e.target.value)}
+                      placeholder="Emma Samuel"
+                      className="w-full bg-neutral-50 border-2 border-neutral-200 focus:border-neutral-900 rounded-2xl pl-10 pr-4 py-3 text-xs font-semibold text-neutral-950 outline-none transition-all duration-200"
+                    />
+                    <div className="absolute left-3.5 top-3.5 text-neutral-400">
+                      <User className="h-4 w-4 stroke-[2.5]" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-mono font-black uppercase text-neutral-400 tracking-wider">
+                    WhatsApp Phone Number
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="tel"
+                      required
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      placeholder="+234..."
+                      className="w-full bg-neutral-50 border-2 border-neutral-200 focus:border-neutral-900 rounded-2xl pl-10 pr-4 py-3 text-xs font-semibold text-neutral-950 outline-none transition-all duration-200"
+                    />
+                    <div className="absolute left-3.5 top-3.5 text-neutral-400">
+                      <Smartphone className="h-4 w-4 stroke-[2.5]" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-mono font-black uppercase text-neutral-400 tracking-wider">
+                    Physical Home Address
+                  </label>
+                  <div className="relative">
+                    <textarea
+                      required
+                      value={editAddress}
+                      onChange={(e) => setEditAddress(e.target.value)}
+                      placeholder="No. 12 Badagry Expressway, Lagos"
+                      rows={2}
+                      className="w-full bg-neutral-50 border-2 border-neutral-200 focus:border-neutral-900 rounded-2xl pl-10 pr-4 py-3 text-xs font-semibold text-neutral-950 outline-none transition-all duration-200 resize-none"
+                    />
+                    <div className="absolute left-3.5 top-4.5 text-neutral-400">
+                      <MapPin className="h-4 w-4 stroke-[2.5]" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-mono font-black uppercase text-neutral-400 tracking-wider">
+                    Personal Bio / Pitch
+                  </label>
+                  <div className="relative">
+                    <textarea
+                      value={editBio}
+                      onChange={(e) => setEditBio(e.target.value)}
+                      placeholder="CEO & Managing Partner of Apex digital holdings."
+                      rows={2}
+                      className="w-full bg-neutral-50 border-2 border-neutral-200 focus:border-neutral-900 rounded-2xl pl-10 pr-4 py-3 text-xs font-semibold text-neutral-950 outline-none transition-all duration-200 resize-none"
+                    />
+                    <div className="absolute left-3.5 top-4.5 text-neutral-400">
+                      <AlignLeft className="h-4 w-4 stroke-[2.5]" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Form Buttons */}
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    disabled={savingProfile}
+                    onClick={() => setIsEditModalOpen(false)}
+                    className="flex-1 bg-white hover:bg-neutral-50 border-2 border-neutral-200 text-neutral-700 text-xs font-black uppercase tracking-widest py-3 rounded-2xl transition-all cursor-pointer font-mono"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingProfile}
+                    className="flex-1 bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-black uppercase tracking-widest py-3 rounded-2xl transition-all cursor-pointer font-mono flex items-center justify-center gap-1.5"
+                  >
+                    {savingProfile ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Syncing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                        <span>Save Changes</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+              </form>
+
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

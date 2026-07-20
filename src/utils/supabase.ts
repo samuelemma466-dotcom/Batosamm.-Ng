@@ -292,12 +292,15 @@ export async function createUserInSupabase(userData: any): Promise<boolean> {
       id: userData.id,
       full_name: userData.fullName,
       email: userData.email,
-      phone: userData.phone,
-      student_id: userData.studentId,
+      phone: userData.phone || null,
+      student_id: userData.studentId || null,
       invite_code: userData.inviteCode,
       referral_count: userData.referralCount || 0,
       avatar_url: userData.avatarUrl || null,
       is_google_user: userData.isGoogleUser || false,
+      address: userData.address || null,
+      bio: userData.bio || null,
+      role: userData.role || "client",
       created_at: new Date().toISOString()
     };
 
@@ -317,8 +320,12 @@ export async function createUserInSupabase(userData: any): Promise<boolean> {
         id: userData.id,
         full_name: userData.fullName,
         email: userData.email,
+        phone: userData.phone || null,
         avatar_url: userData.avatarUrl || null,
         is_google_user: userData.isGoogleUser || false,
+        address: userData.address || null,
+        bio: userData.bio || null,
+        role: userData.role || "client",
         updated_at: new Date().toISOString()
       }], { onConflict: "id" });
 
