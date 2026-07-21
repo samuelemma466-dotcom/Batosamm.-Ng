@@ -10,12 +10,22 @@ interface SplashScreenProps {
 export default function SplashScreen({ onComplete }: SplashScreenProps) {
   const [progress, setProgress] = useState(0);
 
+  const getStatusText = (prog: number) => {
+    if (prog < 15) return "Initializing Bato Sam Digital Hub...";
+    if (prog < 35) return "Loading CAC Corporate Filing Module...";
+    if (prog < 55) return "Spooling High-End Laser Printing System...";
+    if (prog < 75) return "Establishing Secure Database Connection...";
+    if (prog < 90) return "Configuring Academy Dossier Registers...";
+    if (prog < 100) return "Optimizing High-Performance Command Center...";
+    return "Initialization Complete. Welcome.";
+  };
+
   useEffect(() => {
-    // Fail-safe timeout: Force-exit the splash screen after 3 seconds under all circumstances
+    // Fail-safe timeout: Force-exit the splash screen after 6 seconds under all circumstances
     const safetyTimeout = setTimeout(() => {
       console.log("SplashScreen Component: Ironclad fail-safe timeout triggered. Dismissing splash screen.");
       onComplete();
-    }, 3000);
+    }, 6000);
 
     // Elegant, smooth progress bar timer simulating high-end system initialization
     const interval = setInterval(() => {
@@ -24,12 +34,12 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
           clearInterval(interval);
           setTimeout(() => {
             onComplete();
-          }, 300); // Elegant pause to view the completed masterpiece logo
+          }, 450); // Elegant pause to view the completed masterpiece logo
           return 100;
         }
         
-        // Complex, variable increment to simulate real computing blocks
-        const increment = Math.floor(Math.random() * 12) + 6;
+        // Complex, smaller variable increment to simulate real computing blocks and take ~3.5 seconds
+        const increment = Math.floor(Math.random() * 3) + 2; // Increments of 2-4% every 100ms
         return Math.min(prev + increment, 100);
       });
     }, 100);
@@ -115,9 +125,9 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
             </div>
 
             {/* Crucial requested label text */}
-            <div className="text-center">
+            <div className="text-center h-5 flex items-center justify-center">
               <span className="text-[11px] font-sans font-extrabold text-zinc-300 tracking-wide block animate-pulse">
-                Initializing Bato Sam Digital Hub...
+                {getStatusText(progress)}
               </span>
             </div>
           </div>

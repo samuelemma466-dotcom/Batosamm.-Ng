@@ -78,8 +78,8 @@ export default function BatoLogo({ className = "", animate = true, size = 48, mo
             }
           }
           .draw-path {
-            stroke-dasharray: 400;
-            stroke-dashoffset: 400;
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
             animation: draw 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
           }
           .outer-hex-1 {
@@ -119,6 +119,7 @@ export default function BatoLogo({ className = "", animate = true, size = 48, mo
           strokeWidth="2" 
           strokeLinecap="round"
           strokeLinejoin="round"
+          pathLength="100"
           className="draw-path outer-hex-1"
         />
 
@@ -130,6 +131,7 @@ export default function BatoLogo({ className = "", animate = true, size = 48, mo
           strokeDasharray="4 3"
           strokeLinecap="round"
           strokeLinejoin="round"
+          pathLength="100"
           className="draw-path outer-hex-2"
           opacity="0.6"
         />
@@ -141,6 +143,7 @@ export default function BatoLogo({ className = "", animate = true, size = 48, mo
           stroke={strokeB} 
           strokeWidth="4" 
           strokeLinecap="round" 
+          pathLength="100"
           className="draw-path letter-b-stem"
         />
         {/* B Double Loops */}
@@ -150,6 +153,7 @@ export default function BatoLogo({ className = "", animate = true, size = 48, mo
           strokeWidth="4" 
           strokeLinecap="round" 
           strokeLinejoin="round"
+          pathLength="100"
           className="draw-path letter-b-loops"
         />
         
@@ -160,6 +164,7 @@ export default function BatoLogo({ className = "", animate = true, size = 48, mo
           strokeWidth="4" 
           strokeLinecap="round" 
           strokeLinejoin="round"
+          pathLength="100"
           className="draw-path letter-s-curve"
         />
 

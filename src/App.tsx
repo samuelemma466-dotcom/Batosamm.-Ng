@@ -90,13 +90,13 @@ export default function App() {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
-  // 1. Splash Auto-Exit: Guarantee the splash screen closes after 3 seconds maximum
+  // 1. Splash Auto-Exit: Guarantee the splash screen closes after 6 seconds maximum
   useEffect(() => {
     console.log("Splash Screen: Auto-exit timeout registered.");
     const splashTimer = setTimeout(() => {
-      console.log("Splash Screen: Forcing splash auto-exit after 3000ms threshold.");
+      console.log("Splash Screen: Forcing splash auto-exit after 6000ms threshold.");
       setShowSplash(false);
-    }, 3000);
+    }, 6000);
     return () => clearTimeout(splashTimer);
   }, []);
 
