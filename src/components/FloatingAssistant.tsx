@@ -3,6 +3,8 @@ import { motion } from "motion/react";
 import { MessageSquare, X, Send, Sparkles, Loader2, Volume2, VolumeX, Mic, MicOff } from "lucide-react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getCurrentUser } from "../utils/userSession";
+import { getCoreConfig } from "../utils/coreConfig";
+import { getPricingConfig } from "../utils/pricingConfig";
 
 export default function FloatingAssistant() {
   const [isOpen, setIsOpen] = useState(false);
@@ -103,7 +105,8 @@ export default function FloatingAssistant() {
 
   // Load API Key and preferences on mount and when opened
   useEffect(() => {
-    const key = localStorage.getItem("bato_gemini_api_key") || "";
+    const config = getCoreConfig();
+    const key = localStorage.getItem("bato_gemini_api_key") || config.geminiKey;
     const model = localStorage.getItem("bato_gemini_model") || "gemini-2.5-flash";
     const mutedPref = localStorage.getItem("bato_ai_muted") === "true";
     setSavedKey(key);
@@ -111,21 +114,7 @@ export default function FloatingAssistant() {
     setIsMuted(mutedPref);
 
     if (isOpen) {
-      if (!key) {
-        setIsError(true);
-        const missingMsg = "System not configured. Please enter keys in the Admin Panel.";
-        
-        // Add message if not already present
-        setMessages((prev) => {
-          if (prev.length > 0 && prev[prev.length - 1].text === missingMsg) {
-            return prev;
-          }
-          return [...prev, { sender: "bot", text: missingMsg }];
-        });
-        speakText(missingMsg);
-      } else {
-        setIsError(false);
-      }
+      setIsError(false);
     }
   }, [isOpen]);
 
@@ -137,7 +126,11 @@ export default function FloatingAssistant() {
 
       // Small delay so it feels organic after a click
       setTimeout(() => {
-        const text = "Welcome to Bato Sam. How can I assist you today?";
+        const u = getCurrentUser();
+        const name = u ? (u.fullName?.split(" ")[0] || u.fullName) : "Guest";
+        const text = u 
+          ? `Welcome to Bato Sam, ${name}. Your digital portal is ready.`
+          : `Welcome to Bato Sam. Your digital portal is ready.`;
         speakText(text);
       }, 500);
 
@@ -210,13 +203,14 @@ export default function FloatingAssistant() {
         const genAI = new GoogleGenerativeAI(savedKey);
         const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-1.5-flash" });
 
+        const p = getPricingConfig();
         const systemInstruction = 
           "You are the 'Bato Sam Concierge', the official AI assistant for BATO SAM. NG.\n" +
           "Your Tone must be Professional, polite, and authoritative.\n\n" +
           "Core Knowledge:\n" +
           "- Location: Shop 20, Pabe Plaza, Pure Water Bus-Stop, Badagry Expressway, Lagos.\n" +
           "- Jovibe Code: We teach 7 skills (AI, Vibe Coding, Graphics, CBT, 3D, App Dev, Basic Computing). Tuition is FREE. Certificate is ₦5,500. Installment (₦2,750) is allowed. There is also a maintenance fee of ₦200 per class.\n" +
-          "- CAC Services: Business Name (₦25,000), LTD (₦55,000), NGO (₦75,000). Need NIN, 3 Names, and ID.\n" +
+          `- CAC Services: Business Name (₦${p.cacBusinessName.toLocaleString()}), LTD (₦${p.cacLtd.toLocaleString()}), NGO (₦${p.cacNgo.toLocaleString()}). Need NIN, 3 Names, and ID.\n` +
           "- Printing: We handle project typesetting, bulk printing, and hardcover binding.\n\n" +
           "Limitations:\n" +
           "If a user asks a question NOT related to Bato Sam (e.g., 'how to cook rice', 'who is Lionel Messi', general coding or trivia outside Bato Sam digital services), you MUST politely decline and say exactly: " +

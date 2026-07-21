@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Calculator, Sparkles, HelpCircle, Coins, Layers, CheckCircle2 } from "lucide-react";
+import { getPricingConfig } from "../utils/pricingConfig";
 
 interface PrintPriceCalculatorProps {
   onApplySpecs?: (specs: {
@@ -32,6 +33,16 @@ export default function PrintPriceCalculator({ onApplySpecs, initialSpecs }: Pri
   // Status for apply action feedback
   const [applied, setApplied] = useState(false);
 
+  const [pricing, setPricing] = useState(getPricingConfig());
+
+  useEffect(() => {
+    const handlePricesUpdated = () => {
+      setPricing(getPricingConfig());
+    };
+    window.addEventListener("bato_prices_updated", handlePricesUpdated);
+    return () => window.removeEventListener("bato_prices_updated", handlePricesUpdated);
+  }, []);
+
   // Live Sync initialSpecs if they change
   useEffect(() => {
     if (initialSpecs) {
@@ -44,7 +55,7 @@ export default function PrintPriceCalculator({ onApplySpecs, initialSpecs }: Pri
 
   // Pricing constants & logic (aligned with Bato Sam print system)
   const calculateCost = () => {
-    let ratePerPage = colorMode === "Color" ? 0.35 : 0.08;
+    let ratePerPage = colorMode === "Color" ? pricing.printColor : pricing.printMono;
 
     // Weight additions
     if (paperWeight === "120gsm") ratePerPage += 0.05;
@@ -58,17 +69,17 @@ export default function PrintPriceCalculator({ onApplySpecs, initialSpecs }: Pri
 
     // Finishing rates
     let finishingCost = 0;
-    if (finishing === "Stapling") finishingCost = 0.20;
-    else if (finishing === "Spiral Binding") finishingCost = 1.20;
-    else if (finishing === "Hardback Cover") finishingCost = 4.50;
-    else if (finishing === "Laminating") finishingCost = 0.80;
+    if (finishing === "Stapling") finishingCost = pricing.finishStapling;
+    else if (finishing === "Spiral Binding") finishingCost = pricing.finishSpiral;
+    else if (finishing === "Hardback Cover") finishingCost = pricing.finishHardback;
+    else if (finishing === "Laminating") finishingCost = pricing.finishLaminating;
 
     const baseFlatCost = 0;
     const subtotal = (pages * ratePerPage + finishingCost) * quantity + baseFlatCost;
     
     // Apply volume discount above 10 copies
     const finalUSD = quantity >= 10 ? subtotal * 0.90 : subtotal;
-    const finalNGN = Math.max(500, finalUSD * 1500); // ₦1,500 conversion rate with a ₦500 floor
+    const finalNGN = Math.max(500, finalUSD * pricing.nairaRate); // Dynamic conversion rate with a ₦500 floor
 
     return {
       ratePerPage,

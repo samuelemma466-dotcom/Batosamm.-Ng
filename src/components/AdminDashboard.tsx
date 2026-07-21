@@ -33,6 +33,7 @@ import {
 import { getStoredJobs, JobItem, clearAllJobs, updateJobStatus, assignJobToStaff } from "../utils/localStorage";
 import { getAdminAnalytics, incrementLiveVisitors, getStoredUsers, UserAccount, getCurrentUser, updateUserRole } from "../utils/userSession";
 import { supabase } from "../utils/supabase";
+import { getPricingConfig, savePricingConfig } from "../utils/pricingConfig";
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -64,6 +65,18 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
   const [testErrorMessage, setTestErrorMessage] = useState("");
   const [registeredUsers, setRegisteredUsers] = useState<UserAccount[]>([]);
+
+  // Pricing configuration inputs
+  const [cacBusNameInput, setCacBusNameInput] = useState(35000);
+  const [cacLtdInput, setCacLtdInput] = useState(60000);
+  const [cacNgoInput, setCacNgoInput] = useState(120000);
+  const [printMonoInput, setPrintMonoInput] = useState(0.08);
+  const [printColorInput, setPrintColorInput] = useState(0.35);
+  const [finishSpiralInput, setFinishSpiralInput] = useState(3.50);
+  const [finishHardbackInput, setFinishHardbackInput] = useState(15.00);
+  const [finishLaminatingInput, setFinishLaminatingInput] = useState(1.00);
+  const [finishStaplingInput, setFinishStaplingInput] = useState(0.20);
+  const [nairaRateInput, setNairaRateInput] = useState(1500);
 
   const activeStaff = [
     ...registeredUsers.filter((u) => u.role === "staff"),
@@ -99,6 +112,19 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
     setPaystackPubKey(pKey);
     setSupabaseUrlInput(sUrl);
     setSupabaseKeyInput(sKey);
+
+    // Initialize pricing fields
+    const p = getPricingConfig();
+    setCacBusNameInput(p.cacBusinessName);
+    setCacLtdInput(p.cacLtd);
+    setCacNgoInput(p.cacNgo);
+    setPrintMonoInput(p.printMono);
+    setPrintColorInput(p.printColor);
+    setFinishSpiralInput(p.finishSpiral);
+    setFinishHardbackInput(p.finishHardback);
+    setFinishLaminatingInput(p.finishLaminating);
+    setFinishStaplingInput(p.finishStapling);
+    setNairaRateInput(p.nairaRate);
   }, [isAuthenticated]);
 
   useEffect(() => {
@@ -213,11 +239,25 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
     }
     localStorage.setItem("vanguard_whatsapp_phone", cleaned);
     setCrmPhoneInput(cleaned);
+
+    // Save dynamic pricing configuration
+    savePricingConfig({
+      cacBusinessName: Number(cacBusNameInput),
+      cacLtd: Number(cacLtdInput),
+      cacNgo: Number(cacNgoInput),
+      printMono: Number(printMonoInput),
+      printColor: Number(printColorInput),
+      finishSpiral: Number(finishSpiralInput),
+      finishHardback: Number(finishHardbackInput),
+      finishLaminating: Number(finishLaminatingInput),
+      finishStapling: Number(finishStaplingInput),
+      nairaRate: Number(nairaRateInput)
+    });
     
     // Dispatch event to sync any listening components
     window.dispatchEvent(new Event("vanguard_whatsapp_phone_updated"));
     window.dispatchEvent(new Event("bato_sam_keys_updated"));
-    alert("System Integration credentials saved successfully!");
+    alert("System Integration credentials and pricing rates saved successfully!");
   };
 
   const handleNotifyCustomer = async (job: JobItem) => {
@@ -698,7 +738,7 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                                 <div className="flex items-center gap-2">
                                   <select
                                     value={
-                                      job.status === "Awaiting Approval"
+                                      (job.status || "").startsWith("Awaiting Approval")
                                         ? "Awaiting Approval"
                                         : job.status === "Pending" || job.status === "In Review" || job.status === "Pending Verification"
                                         ? "Pending"
@@ -946,7 +986,7 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                                   <select
                                     value={
-                                      job.status === "Awaiting Approval"
+                                      (job.status || "").startsWith("Awaiting Approval")
                                         ? "Awaiting Approval"
                                         : job.status === "Pending" || job.status === "In Review" || job.status === "Pending Verification"
                                         ? "Pending"
@@ -1373,6 +1413,165 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                     >
                       ⚡ Launch Setup Terminal
                     </button>
+                  </div>
+
+                  <div className="relative flex py-2 items-center">
+                    <div className="flex-grow border-t border-zinc-200/50"></div>
+                    <span className="flex-shrink mx-4 text-[9px] font-mono font-bold text-slate-600 uppercase tracking-widest">PRICING & FEE MANAGEMENT</span>
+                    <div className="flex-grow border-t border-zinc-200/50"></div>
+                  </div>
+
+                  {/* Pricing Fields Grid */}
+                  <div className="bg-amber-500/5 border border-amber-200/40 rounded-[28px] p-5 space-y-5">
+                    <div className="flex items-center gap-2 text-amber-800 dark:text-amber-500">
+                      <DollarSign className="h-4.5 w-4.5 text-amber-500" />
+                      <span className="text-xs font-bold uppercase tracking-wider">Dynamic Fee Command Center</span>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-mono font-bold text-zinc-500 uppercase">
+                          CAC Business Name Registration (₦)
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          value={cacBusNameInput}
+                          onChange={(e) => setCacBusNameInput(Math.max(0, Number(e.target.value)))}
+                          className="w-full rounded-[16px] border border-zinc-200/85 bg-white px-4 py-2.5 text-xs text-[#1D1D1F] outline-none focus:border-zinc-400 font-mono"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-mono font-bold text-zinc-500 uppercase">
+                          CAC Private LTD Registration (₦)
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          value={cacLtdInput}
+                          onChange={(e) => setCacLtdInput(Math.max(0, Number(e.target.value)))}
+                          className="w-full rounded-[16px] border border-zinc-200/85 bg-white px-4 py-2.5 text-xs text-[#1D1D1F] outline-none focus:border-zinc-400 font-mono"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-mono font-bold text-zinc-500 uppercase">
+                          CAC NGO / Association Registration (₦)
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          value={cacNgoInput}
+                          onChange={(e) => setCacNgoInput(Math.max(0, Number(e.target.value)))}
+                          className="w-full rounded-[16px] border border-zinc-200/85 bg-white px-4 py-2.5 text-xs text-[#1D1D1F] outline-none focus:border-zinc-400 font-mono"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-mono font-bold text-zinc-500 uppercase">
+                          Naira Conversion Rate (₦ per USD)
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          value={nairaRateInput}
+                          onChange={(e) => setNairaRateInput(Math.max(1, Number(e.target.value)))}
+                          className="w-full rounded-[16px] border border-zinc-200/85 bg-white px-4 py-2.5 text-xs text-[#1D1D1F] outline-none focus:border-zinc-400 font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="border-t border-amber-200/25 pt-4">
+                      <span className="block text-[9px] font-mono font-bold text-amber-800 dark:text-amber-500 uppercase tracking-widest mb-3">
+                        Laser Print Spooling & Finishing Rates (USD)
+                      </span>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="space-y-1">
+                          <label className="block text-[9px] font-mono font-bold text-zinc-400 uppercase">
+                            Mono Page ($)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            required
+                            value={printMonoInput}
+                            onChange={(e) => setPrintMonoInput(Math.max(0, Number(e.target.value)))}
+                            className="w-full rounded-[16px] border border-zinc-200/85 bg-white px-4 py-2 text-xs text-[#1D1D1F] outline-none focus:border-zinc-400 font-mono"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-[9px] font-mono font-bold text-zinc-400 uppercase">
+                            Color Page ($)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            required
+                            value={printColorInput}
+                            onChange={(e) => setPrintColorInput(Math.max(0, Number(e.target.value)))}
+                            className="w-full rounded-[16px] border border-zinc-200/85 bg-white px-4 py-2 text-xs text-[#1D1D1F] outline-none focus:border-zinc-400 font-mono"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-[9px] font-mono font-bold text-zinc-400 uppercase">
+                            Spiral Bind ($)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            required
+                            value={finishSpiralInput}
+                            onChange={(e) => setFinishSpiralInput(Math.max(0, Number(e.target.value)))}
+                            className="w-full rounded-[16px] border border-zinc-200/85 bg-white px-4 py-2 text-xs text-[#1D1D1F] outline-none focus:border-zinc-400 font-mono"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-[9px] font-mono font-bold text-zinc-400 uppercase">
+                            Hardback Bind ($)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            required
+                            value={finishHardbackInput}
+                            onChange={(e) => setFinishHardbackInput(Math.max(0, Number(e.target.value)))}
+                            className="w-full rounded-[16px] border border-zinc-200/85 bg-white px-4 py-2 text-xs text-[#1D1D1F] outline-none focus:border-zinc-400 font-mono"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-[9px] font-mono font-bold text-zinc-400 uppercase">
+                            Lamination ($)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            required
+                            value={finishLaminatingInput}
+                            onChange={(e) => setFinishLaminatingInput(Math.max(0, Number(e.target.value)))}
+                            className="w-full rounded-[16px] border border-zinc-200/85 bg-white px-4 py-2 text-xs text-[#1D1D1F] outline-none focus:border-zinc-400 font-mono"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-[9px] font-mono font-bold text-zinc-400 uppercase">
+                            Stapling ($)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            required
+                            value={finishStaplingInput}
+                            onChange={(e) => setFinishStaplingInput(Math.max(0, Number(e.target.value)))}
+                            className="w-full rounded-[16px] border border-zinc-200/85 bg-white px-4 py-2 text-xs text-[#1D1D1F] outline-none focus:border-zinc-400 font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="relative flex py-2 items-center">

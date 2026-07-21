@@ -11,28 +11,20 @@ import {
   User as FirebaseUser
 } from "firebase/auth";
 import { getAnalytics, isSupported, Analytics } from "firebase/analytics";
+import { getCoreConfig } from "./coreConfig";
 
 // Public firebase credentials for client application
 const metaEnv = (import.meta as any).env || {};
 
-function getEnvValue(val: any, fallback: string): string {
-  if (typeof val === "string") {
-    const trimmed = val.trim();
-    if (trimmed && trimmed !== "undefined" && trimmed !== "null") {
-      return trimmed;
-    }
-  }
-  return fallback;
-}
-
+const config = getCoreConfig();
 const firebaseConfig = {
-  apiKey: getEnvValue(metaEnv.VITE_FIREBASE_API_KEY, "AIzaSyCoJYXzyyE6lTWS3gy1nvZPjsXo9Y87ipI"),
-  authDomain: getEnvValue(metaEnv.VITE_FIREBASE_AUTH_DOMAIN, "batosamdg.firebaseapp.com"),
-  projectId: getEnvValue(metaEnv.VITE_FIREBASE_PROJECT_ID, "batosamdg"),
-  storageBucket: getEnvValue(metaEnv.VITE_FIREBASE_STORAGE_BUCKET, "batosamdg.firebasestorage.app"),
-  messagingSenderId: getEnvValue(metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID, "12640642475"),
-  appId: getEnvValue(metaEnv.VITE_FIREBASE_APP_ID, "1:12640642475:web:92bc56c23543df3ad21eee"),
-  measurementId: getEnvValue(metaEnv.VITE_FIREBASE_MEASUREMENT_ID, "G-SWY0V4WXVC")
+  apiKey: config.firebaseConfig.apiKey,
+  authDomain: config.firebaseConfig.authDomain,
+  projectId: config.firebaseConfig.projectId,
+  storageBucket: config.firebaseConfig.storageBucket,
+  messagingSenderId: config.firebaseConfig.messagingSenderId,
+  appId: config.firebaseConfig.appId,
+  measurementId: config.firebaseConfig.measurementId
 };
 
 let app: FirebaseApp;

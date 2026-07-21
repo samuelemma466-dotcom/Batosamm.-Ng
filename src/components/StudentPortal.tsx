@@ -325,7 +325,7 @@ export default function StudentPortal() {
       email: email.trim() || `${phone.replace(/\s+/g, "")}@jovibecode.com`,
       phone,
       course: selectedSkills.join(", "),
-      status: "Awaiting Approval", // Set status to Awaiting Approval for manual validation
+      status: "Awaiting Approval (₦5,500)", // Set status to Awaiting Approval for manual validation
       timestamp: new Date().toISOString(),
       whatsappMessage: `https://wa.me/${admissionsDeskPhone}?text=${waText}`,
       paymentRef: refId,
@@ -1297,24 +1297,24 @@ export default function StudentPortal() {
                 <div className="bg-zinc-900/60 rounded-[18px] p-4 border border-zinc-800/80 space-y-3 font-mono text-xs text-zinc-100">
                   <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">Bank Name</span>
-                    <span className="font-extrabold text-zinc-300">OPay / Moniepoint</span>
+                    <span className="font-extrabold text-zinc-300">OPay</span>
                   </div>
                   <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">Account Number</span>
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText("09135580911");
+                        navigator.clipboard.writeText("9033106381");
                       }}
                       className="font-mono font-extrabold text-[#D4AF37] hover:underline cursor-pointer flex items-center gap-1 bg-transparent border-0"
                     >
-                      <span>09135580911</span>
+                      <span>9033106381</span>
                       <span className="text-[9px] text-zinc-500 font-normal">(Copy)</span>
                     </button>
                   </div>
                   <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">Account Name</span>
-                    <span className="font-extrabold text-zinc-300">Bato Sam Nig</span>
+                    <span className="font-extrabold text-zinc-300">Samuel Austine Uzor</span>
                   </div>
                   <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">Amount to Pay</span>

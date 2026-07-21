@@ -26,8 +26,9 @@ import {
   FileSignature,
   Share2
 } from "lucide-react";
-import { saveJob } from "../utils/localStorage";
-import { uploadFileToSupabase, createOrderInSupabase, uploadProofToSupabase, sendAdminAlert } from "../utils/supabase";
+import { saveJob, getStoredJobs } from "../utils/localStorage";
+import { uploadFileToSupabase, createOrderInSupabase, uploadProofToSupabase, sendAdminAlert, fetchOrdersFromSupabase } from "../utils/supabase";
+import { getPricingConfig } from "../utils/pricingConfig";
 import { enhanceDocumentImage } from "../utils/imageEnhancer";
 import PrintPriceCalculator from "./PrintPriceCalculator";
 
@@ -168,6 +169,38 @@ export default function PrintHub() {
   const [totalCost, setTotalCost] = useState(0.00);
   const [ticketId, setTicketId] = useState("");
   const [validationError, setValidationError] = useState("");
+  const [registeredBusinesses, setRegisteredBusinesses] = useState<any[]>([]);
+  const [selectedBusiness, setSelectedBusiness] = useState<string>("");
+  const [pricing, setPricing] = useState(getPricingConfig());
+
+  useEffect(() => {
+    const handlePricesUpdated = () => {
+      setPricing(getPricingConfig());
+    };
+    window.addEventListener("bato_prices_updated", handlePricesUpdated);
+    return () => window.removeEventListener("bato_prices_updated", handlePricesUpdated);
+  }, []);
+
+  useEffect(() => {
+    async function loadBusinesses() {
+      try {
+        const jobs = await fetchOrdersFromSupabase();
+        const cac = jobs.filter((j: any) => j.type === "CAC_REGISTRATION");
+        setRegisteredBusinesses(cac);
+      } catch (err) {
+        console.warn("Error loading businesses for Print Hub selection:", err);
+        const local = getStoredJobs().filter((j: any) => j.type === "CAC_REGISTRATION");
+        setRegisteredBusinesses(local);
+      }
+    }
+    loadBusinesses();
+
+    const handleUpdated = () => {
+      loadBusinesses();
+    };
+    window.addEventListener("vanguard_jobs_updated", handleUpdated);
+    return () => window.removeEventListener("vanguard_jobs_updated", handleUpdated);
+  }, []);
 
   // Share action state & handler
   const [shareNotification, setShareNotification] = useState("");
@@ -255,11 +288,11 @@ export default function PrintHub() {
 
   // Pricing engine calculations
   useEffect(() => {
-    let ratePerPage = 0.08; // Mono
+    let ratePerPage = pricing.printMono; // Mono
     let baseFlatCost = 0;
 
     if (jobType === "Print") {
-      ratePerPage = colorMode === "Color" ? 0.35 : 0.08;
+      ratePerPage = colorMode === "Color" ? pricing.printColor : pricing.printMono;
       
       // Adjust for paper weight
       if (paperWeight === "120gsm") ratePerPage += 0.05;
@@ -311,10 +344,10 @@ export default function PrintHub() {
 
     // Finishing rates
     let finishingCost = 0;
-    if (finishing === "Spiral Binding") finishingCost = 3.50;
-    else if (finishing === "Hardback Cover") finishingCost = 15.00;
-    else if (finishing === "Laminating") finishingCost = 1.00; // Per page or flat
-    else if (finishing === "Stapling") finishingCost = 0.20;
+    if (finishing === "Spiral Binding") finishingCost = pricing.finishSpiral;
+    else if (finishing === "Hardback Cover") finishingCost = pricing.finishHardback;
+    else if (finishing === "Laminating") finishingCost = pricing.finishLaminating; // Per page or flat
+    else if (finishing === "Stapling") finishingCost = pricing.finishStapling;
 
     // Delivery cost rates
     let shippingCost = 0;
@@ -669,6 +702,9 @@ export default function PrintHub() {
     let finalFileName = fileName;
     
     let finalInstructions = `Delivery: ${deliveryMethod === "Waybill" ? `Waybill Address: ${deliveryAddress}` : "Self Pickup"}. ${instructions} [Manual Bank Transfer Ref: ${paystackRef}]`;
+    if (selectedBusiness) {
+      finalInstructions += ` [Linked Registered CAC Business: ${selectedBusiness}]`;
+    }
 
     try {
       if (file) {
@@ -712,7 +748,7 @@ export default function PrintHub() {
         finishing,
         instructions: finalInstructions,
         totalCost,
-        status: `Awaiting Approval`, // Set status to Awaiting Approval for manual screenshot
+        status: `Awaiting Approval (₦${Math.round(totalCost * pricing.nairaRate).toLocaleString()})`, // Set status to Awaiting Approval for manual screenshot
         timestamp: new Date().toISOString(),
         whatsappMessage: `https://wa.me/${phone}?text=${waText}`,
         proofUrl: proofUrl || null
@@ -723,7 +759,7 @@ export default function PrintHub() {
 
       // Trigger EmailJS notification alert to Admin
       await sendAdminAlert(
-        `New print order awaiting payment verification! ID: #${ticketId}, Customer: ${customerName}, Amount: NGN ${(totalCost * 1500).toLocaleString()}`
+        `New print order awaiting payment verification! ID: #${ticketId}, Customer: ${customerName}, Amount: NGN ${(totalCost * pricing.nairaRate).toLocaleString()}`
       );
 
       setPrintReceipt(newJob);
@@ -905,7 +941,7 @@ export default function PrintHub() {
                 </div>
                 <div>
                   <span className="text-[9px] font-mono text-zinc-400 block font-bold uppercase tracking-wider">Conversion Cost</span>
-                  <span className="font-extrabold text-emerald-700 block mt-0.5">₦{(printReceipt.totalCost * 1500).toLocaleString()} NGN</span>
+                  <span className="font-extrabold text-emerald-700 block mt-0.5">₦{(printReceipt.totalCost * pricing.nairaRate).toLocaleString()} NGN</span>
                 </div>
                 <div className="col-span-2 border-t border-zinc-200/60 pt-3">
                   <span className="text-[9px] font-mono text-zinc-400 block font-bold uppercase tracking-wider">Fulfillment Status</span>
@@ -1060,6 +1096,39 @@ export default function PrintHub() {
                       Browse files <ChevronRight className="h-3 w-3" />
                     </button>
                   </div>
+
+                  {/* Registered business selector */}
+                  {registeredBusinesses.length > 0 && (
+                    <div className="rounded-[24px] border border-amber-200 bg-amber-500/5 p-4 space-y-3">
+                      <div className="flex items-center gap-1.5 text-[10px] font-extrabold text-amber-700 dark:text-amber-500 uppercase tracking-wider">
+                        <Sparkles className="h-4 w-4 text-amber-500 animate-pulse" />
+                        Spool From Your Registered Corporate Listings
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
+                        Select an approved or pending corporate CAC registration listing below to auto-populate and print its official legal documents.
+                      </p>
+                      <select
+                        value={selectedBusiness}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedBusiness(val);
+                          if (val) {
+                            setValidationError("");
+                            setFileName(`CAC_Incorporation_Certificate_${val.replace(/\s+/g, "_")}.pdf`);
+                            setPageCount(3); // Standard CAC certificate is 3 pages
+                          }
+                        }}
+                        className="w-full bg-white border border-amber-200 rounded-[16px] px-4 py-3 text-xs font-semibold text-slate-900 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 shadow-sm"
+                      >
+                        <option value="">-- Select Corporate CAC Listing --</option>
+                        {registeredBusinesses.map((biz) => (
+                          <option key={biz.id} value={biz.businessName}>
+                            {biz.businessName} ({biz.entityType})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {/* Manual input override in case they don't have local files */}
                   <div className="rounded-[24px] border border-slate-200 bg-slate-50/30 p-4 space-y-3">
@@ -2380,29 +2449,29 @@ export default function PrintHub() {
                 <div className="bg-zinc-900/60 rounded-[18px] p-4 border border-zinc-800/80 space-y-3 font-mono text-xs">
                   <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">Bank Name</span>
-                    <span className="font-extrabold text-zinc-300">OPay / Moniepoint</span>
+                    <span className="font-extrabold text-zinc-300">OPay</span>
                   </div>
                   <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">Account Number</span>
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText("09135580911");
+                        navigator.clipboard.writeText("9033106381");
                       }}
                       className="font-mono font-extrabold text-amber-500 hover:underline cursor-pointer flex items-center gap-1 bg-transparent border-0"
                     >
-                      <span>09135580911</span>
+                      <span>9033106381</span>
                       <span className="text-[9px] text-zinc-500 font-normal">(Copy)</span>
                     </button>
                   </div>
                   <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">Account Name</span>
-                    <span className="font-extrabold text-zinc-300">Bato Sam Nig</span>
+                    <span className="font-extrabold text-zinc-300">Samuel Austine Uzor</span>
                   </div>
                   <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">Amount to Pay</span>
                     <span className="font-extrabold text-amber-500 text-sm">
-                      ₦{Math.round(Math.max(500, totalCost * 1500)).toLocaleString()} NGN
+                      ₦{Math.round(Math.max(500, totalCost * pricing.nairaRate)).toLocaleString()} NGN
                     </span>
                   </div>
                   <div className="flex justify-between items-center">

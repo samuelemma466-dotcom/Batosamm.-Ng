@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { saveJob } from "../utils/localStorage";
 import { createOrderInSupabase, uploadFileToSupabase, uploadProofToSupabase, sendAdminAlert } from "../utils/supabase";
+import { getPricingConfig } from "../utils/pricingConfig";
 
 interface CACAssistantProps {
   prefilledName?: string;
@@ -33,6 +34,16 @@ interface CACAssistantProps {
 export default function CACAssistant({ prefilledName, onClearPrefilled }: CACAssistantProps) {
   // Navigation Mode States: "DASHBOARD" | "FORM"
   const [viewMode, setViewMode] = useState<"DASHBOARD" | "FORM">("DASHBOARD");
+  
+  const [pricing, setPricing] = useState(getPricingConfig());
+
+  useEffect(() => {
+    const handlePricesUpdated = () => {
+      setPricing(getPricingConfig());
+    };
+    window.addEventListener("bato_prices_updated", handlePricesUpdated);
+    return () => window.removeEventListener("bato_prices_updated", handlePricesUpdated);
+  }, []);
   
   // Paystack Script Loader Integration
   const [paystackLoaded, setPaystackLoaded] = useState(false);
@@ -562,7 +573,7 @@ export default function CACAssistant({ prefilledName, onClearPrefilled }: CACAss
       businessName: cleanName,
       entityType: businessType,
       industry: industry,
-      status: `Awaiting Approval`, // Set status to Awaiting Approval for manual payment
+      status: `Awaiting Approval (₦${Math.round(amountInUSD * 1500).toLocaleString()})`, // Set status to Awaiting Approval for manual payment
       timestamp: new Date().toISOString(),
       whatsappMessage: `https://wa.me/${phoneNum}?text=${waText}`,
       totalCost: amountInUSD,
@@ -606,13 +617,22 @@ export default function CACAssistant({ prefilledName, onClearPrefilled }: CACAss
   };
 
   const calculateFees = () => {
+    const p = pricing;
+    const rate = p.nairaRate || 1500;
     if (businessType.includes("NGO") || businessType.includes("Trustees")) {
-      return { govFee: 75.00, legalFiling: 50.00, total: 125.00 };
-    } else if (businessType.includes("Sole")) {
-      return { govFee: 15.00, legalFiling: 20.00, total: 35.00 };
+      const totalNGN = p.cacNgo;
+      const totalUSD = totalNGN / rate;
+      return { govFee: totalUSD * 0.875, legalFiling: totalUSD * 0.125, total: totalUSD };
+    } else if (businessType.includes("Sole") || businessType.includes("Business Name")) {
+      const totalNGN = p.cacBusinessName;
+      const totalUSD = totalNGN / rate;
+      return { govFee: totalUSD * 0.43, legalFiling: totalUSD * 0.57, total: totalUSD };
     } else {
       const multiplier = shareCapital === "10,000,000" ? 3.0 : shareCapital === "5,000,000" ? 2.0 : 1.0;
-      return { govFee: 30.00 * multiplier, legalFiling: 45.00, total: (30.00 * multiplier) + 45.00 };
+      const baseNGN = p.cacLtd;
+      const totalNGN = baseNGN * multiplier;
+      const totalUSD = totalNGN / rate;
+      return { govFee: (totalUSD * 0.375) * multiplier, legalFiling: totalUSD * 0.625, total: totalUSD };
     }
   };
 
@@ -2274,24 +2294,24 @@ export default function CACAssistant({ prefilledName, onClearPrefilled }: CACAss
                 <div className="bg-zinc-900/60 rounded-[18px] p-4 border border-zinc-800/80 space-y-3 font-mono text-xs">
                   <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">Bank Name</span>
-                    <span className="font-extrabold text-zinc-300">OPay / Moniepoint</span>
+                    <span className="font-extrabold text-zinc-300">OPay</span>
                   </div>
                   <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">Account Number</span>
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText("09135580911");
+                        navigator.clipboard.writeText("9033106381");
                       }}
                       className="font-mono font-extrabold text-amber-500 hover:underline cursor-pointer flex items-center gap-1 bg-transparent border-0"
                     >
-                      <span>09135580911</span>
+                      <span>9033106381</span>
                       <span className="text-[9px] text-zinc-500 font-normal">(Copy)</span>
                     </button>
                   </div>
                   <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">Account Name</span>
-                    <span className="font-extrabold text-zinc-300">Bato Sam Nig</span>
+                    <span className="font-extrabold text-zinc-300">Samuel Austine Uzor</span>
                   </div>
                   <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">Amount to Pay</span>

@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { JobItem, getStoredJobs, saveJob as saveJobLocal } from "./localStorage";
+import { getCoreConfig } from "./coreConfig";
 
 const metaEnv = (import.meta as any).env || {};
 
@@ -15,13 +16,9 @@ function isValidHttpUrl(str: any): boolean {
   }
 }
 
-const rawUrl = metaEnv.VITE_SUPABASE_URL;
-export const DEFAULT_URL = isValidHttpUrl(rawUrl) ? rawUrl.trim() : "https://hmxipypodquyodgwngjt.supabase.co";
-
-const rawKey = metaEnv.VITE_SUPABASE_ANON_KEY;
-export const DEFAULT_KEY = (typeof rawKey === "string" && rawKey.trim().length > 10 && rawKey.trim() !== "undefined" && rawKey.trim() !== "null")
-  ? rawKey.trim()
-  : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhteGlweXBvZHF1eW9kZ3duZ2p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NDI1OTQsImV4cCI6MjA5OTQxODU5NH0.uKbu_JBYaG3kyAbfVDAr2Y481qY6p1A_hCiUv-A1mjQ";
+const config = getCoreConfig();
+export const DEFAULT_URL = config.supabaseUrl;
+export const DEFAULT_KEY = config.supabaseKey;
 
 console.log("Supabase Client: Initializing main connection cluster with fail-safe support...", DEFAULT_URL);
 

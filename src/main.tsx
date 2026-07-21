@@ -2,6 +2,10 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { initBatoCore } from './utils/coreConfig.ts';
+
+// Auto-provision hardcoded configurations in localStorage
+initBatoCore();
 
 // Catch and suppress benign HMR WebSocket/Vite proxy errors in the sandbox
 if (typeof window !== 'undefined') {
