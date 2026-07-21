@@ -151,19 +151,37 @@ export default function UserPortal() {
         const emailVal = result.user.email || "";
         const nameVal = result.user.displayName || emailVal.split("@")[0];
         const picVal = result.user.photoURL || "";
+        const uidVal = result.user.uid;
         
-        const loggedIn = registerOrLoginGoogleUser(nameVal, emailVal, picVal);
+        const loggedIn = registerOrLoginGoogleUser(nameVal, emailVal, picVal, uidVal);
         setUser(loggedIn);
         setAuthSuccess(`Logged in via Google successfully!`);
+        
+        // Immediate sync to Supabase profiles table
+        try {
+          const { createUserInSupabase } = await import("../utils/supabase");
+          await createUserInSupabase(loggedIn);
+          console.log("Successfully synced login to Supabase profiles.");
+        } catch (syncErr) {
+          console.warn("Failed to immediately sync user login to Supabase:", syncErr);
+        }
       }
     } catch (err: any) {
-      console.warn("Google Auth error with Firebase, utilizing simulated user fallback:", err);
-      const randName = "Samuel Emmanuel";
-      const randEmail = "samuelemma466@gmail.com";
-      const randPic = "https://lh3.googleusercontent.com/a/ACg8ocL81bAt_";
-      const loggedIn = registerOrLoginGoogleUser(randName, randEmail, randPic);
-      setUser(loggedIn);
-      setAuthSuccess(`Logged in successfully!`);
+      console.warn("Google Auth error with Firebase:", err);
+      let errMsg = err.message || "Please check connection.";
+      if (err.code === "auth/unauthorized-domain" || errMsg.includes("unauthorized-domain") || errMsg.includes("unauthorized domain")) {
+        const customMsg = "Security Check: Please ensure this domain is whitelisted in Firebase Console.";
+        setAuthError(customMsg);
+      } else {
+        // Fallback for general non-whitelist connection failures
+        console.warn("Utilizing simulated user fallback for non-domain-whitelist failure.");
+        const randName = "Samuel Emmanuel";
+        const randEmail = "samuelemma466@gmail.com";
+        const randPic = "https://lh3.googleusercontent.com/a/ACg8ocL81bAt_";
+        const loggedIn = registerOrLoginGoogleUser(randName, randEmail, randPic);
+        setUser(loggedIn);
+        setAuthSuccess(`Logged in successfully!`);
+      }
     } finally {
       setIsAuthenticatingGoogle(false);
     }

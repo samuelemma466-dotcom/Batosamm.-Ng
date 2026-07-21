@@ -166,6 +166,13 @@ export async function createOrderInSupabase(job: JobItem): Promise<{ success: bo
       town: job.type === "ACADEMY_ENROLLMENT" ? (job as any).town : null,
       religion: job.type === "ACADEMY_ENROLLMENT" ? (job as any).religion : null,
       payment_option: job.type === "ACADEMY_ENROLLMENT" ? (job as any).paymentOption : null,
+
+      // Dual-schema parameters support (to map to profiles and orders tables)
+      customer_id: (typeof window !== "undefined" ? JSON.parse(localStorage.getItem("bato_sam_current_user") || "null") : null)?.id || job.id,
+      service_type: job.type === "CAC_REGISTRATION" ? "CAC" : job.type === "PRINT_ORDER" ? "Printing" : "Academy",
+      details: job,
+      amount: job.totalCost || 5500,
+      proof_url: (job as any).proofUrl || null
     };
 
     const { data, error } = await supabase
@@ -363,3 +370,193 @@ export async function createReferralInSupabase(referralData: any): Promise<boole
     return false;
   }
 }
+
+// Upload Proof of Payment Screenshot
+export async function uploadProofToSupabase(file: File): Promise<{ url: string | null; error: any }> {
+  try {
+    const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
+    const fileExt = cleanFileName.split(".").pop();
+    const fileName = `${Math.random().toString(36).substring(2, 10)}_${Date.now()}.${fileExt}`;
+    const filePath = `proofs/${fileName}`;
+
+    // Try 'proofs' bucket first, fallback to 'uploads' if not provisioned
+    let bucket = "proofs";
+    let { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(filePath, file, { cacheControl: "3600", upsert: false });
+
+    if (error) {
+      console.warn("Uploading to proofs bucket failed, attempting fallback to uploads bucket:", error);
+      bucket = "uploads";
+      const retry = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file, { cacheControl: "3600", upsert: false });
+      data = retry.data;
+      error = retry.error;
+    }
+
+    if (error) {
+      console.error("All Supabase storage buckets failed for screenshot upload:", error);
+      return { url: null, error };
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(filePath);
+
+    return { url: publicUrl, error: null };
+  } catch (err: any) {
+    console.error("General payment proof upload error:", err);
+    return { url: null, error: err };
+  }
+}
+
+// Credit Referrer with 100 Points and Save in Supabase Master Ledger
+export async function creditReferralPoints(referrerCodeOrId: string, referredName: string): Promise<boolean> {
+  try {
+    let referrerId = referrerCodeOrId;
+    let currentPoints = 0;
+    let currentCount = 0;
+
+    // 1. Search for referrer in profiles table
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, referral_points, referral_count, full_name, email")
+      .or(`id.eq.${referrerCodeOrId},invite_code.eq.${referrerCodeOrId}`);
+
+    let referrerProfile = profiles && profiles[0];
+    
+    // If not found in profiles, search users table
+    if (!referrerProfile) {
+      const { data: users } = await supabase
+        .from("users")
+        .select("id, referral_count, full_name, email")
+        .or(`id.eq.${referrerCodeOrId},invite_code.eq.${referrerCodeOrId}`);
+      if (users && users[0]) {
+        referrerProfile = users[0];
+      }
+    }
+
+    if (referrerProfile) {
+      referrerId = referrerProfile.id;
+      currentPoints = parseInt(referrerProfile.referral_points || "0") || 0;
+      currentCount = parseInt(referrerProfile.referral_count || "0") || 0;
+    }
+
+    const newPoints = currentPoints + 100;
+    const newCount = currentCount + 1;
+
+    // 2. Perform updates
+    await supabase
+      .from("profiles")
+      .update({ referral_points: newPoints, referral_count: newCount })
+      .eq("id", referrerId);
+
+    await supabase
+      .from("users")
+      .update({ referral_count: newCount })
+      .eq("id", referrerId);
+
+    // Insert into referrals record ledger
+    await supabase
+      .from("referrals")
+      .insert([{
+        referrer_id: referrerId,
+        referred_name: referredName,
+        reward_points: 100,
+        created_at: new Date().toISOString()
+      }]);
+
+    // Insert into a dedicated system_activities table for real-time live activity logs feed
+    await supabase
+      .from("system_activities")
+      .insert([{
+        type: "REFERRAL_CREDIT",
+        description: `🎉 Referral: ${referredName} joined! 100 PTS credited to ${referrerProfile?.full_name || referrerId}.`,
+        created_at: new Date().toISOString()
+      }]).catch(() => {});
+
+    // 3. Update localStorage lists so local state is instantly updated
+    if (typeof window !== "undefined") {
+      const storedUsersRaw = localStorage.getItem("bato_sam_registered_users");
+      if (storedUsersRaw) {
+        try {
+          const parsed = JSON.parse(storedUsersRaw);
+          const updated = parsed.map((u: any) => {
+            if (u.id === referrerId || u.inviteCode === referrerCodeOrId) {
+              return {
+                ...u,
+                referralCount: (u.referralCount || 0) + 1,
+                referredEmails: [...(u.referredEmails || []), referredName]
+              };
+            }
+            return u;
+          });
+          localStorage.setItem("bato_sam_registered_users", JSON.stringify(updated));
+          
+          // Also update current user profile state if they are the referrer themselves
+          const cur = JSON.parse(localStorage.getItem("bato_sam_current_user") || "null");
+          if (cur && (cur.id === referrerId || cur.inviteCode === referrerCodeOrId)) {
+            const updatedCur = {
+              ...cur,
+              referralCount: (cur.referralCount || 0) + 1,
+              referredEmails: [...(cur.referredEmails || []), referredName]
+            };
+            localStorage.setItem("bato_sam_current_user", JSON.stringify(updatedCur));
+            window.dispatchEvent(new Event("bato_user_session_changed"));
+          }
+        } catch (e) {
+          console.error("Failed to sync points locally:", e);
+        }
+      }
+    }
+
+    return true;
+  } catch (err) {
+    console.error("Failed to credit referral points in Supabase:", err);
+    return false;
+  }
+}
+
+// Send Admin Alert using EmailJS REST API
+export async function sendAdminAlert(message: string): Promise<boolean> {
+  try {
+    const serviceId = localStorage.getItem("bato_sam_emailjs_service_id") || "service_bato_sam";
+    const templateId = localStorage.getItem("bato_sam_emailjs_template_id") || "template_bato_sam";
+    const userId = localStorage.getItem("bato_sam_emailjs_user_id") || "user_bato_sam_public_key";
+
+    const payload = {
+      service_id: serviceId,
+      template_id: templateId,
+      user_id: userId,
+      template_params: {
+        to_name: "Bato Sam Admin",
+        to_phone: "2349043017213",
+        message: message,
+        timestamp: new Date().toLocaleDateString()
+      }
+    };
+
+    const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      console.log("Admin EmailJS alert dispatched successfully.");
+      return true;
+    } else {
+      const text = await res.text();
+      console.warn("EmailJS alert returned non-ok status:", text);
+      return false;
+    }
+  } catch (err) {
+    console.error("Failed to send Admin EmailJS alert:", err);
+    return false;
+  }
+}
+
+

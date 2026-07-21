@@ -131,8 +131,9 @@ export default function App() {
             const emailVal = firebaseUser.email || "";
             const nameVal = firebaseUser.displayName || emailVal.split("@")[0];
             const picVal = firebaseUser.photoURL || "";
+            const uidVal = firebaseUser.uid;
             
-            registerOrLoginGoogleUser(nameVal, emailVal, picVal);
+            registerOrLoginGoogleUser(nameVal, emailVal, picVal, uidVal);
             setIsAuthenticatingGoogle(false);
           } else {
             const current = getCurrentUser();
@@ -169,6 +170,18 @@ export default function App() {
     return () => {
       window.removeEventListener("bato_user_session_changed", handleSessionChange);
     };
+  }, []);
+
+  // Capture referral / invite parameter on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const refCode = params.get("ref");
+      if (refCode) {
+        localStorage.setItem("bato_sam_referred_by", refCode);
+        console.log("Captured client referral reference key:", refCode);
+      }
+    }
   }, []);
 
   // Handle require login events
@@ -216,13 +229,29 @@ export default function App() {
         const emailVal = result.user.email || "";
         const nameVal = result.user.displayName || emailVal.split("@")[0];
         const picVal = result.user.photoURL || "";
+        const uidVal = result.user.uid;
         
-        const loggedIn = registerOrLoginGoogleUser(nameVal, emailVal, picVal);
+        const loggedIn = registerOrLoginGoogleUser(nameVal, emailVal, picVal, uidVal);
         setCurrentUser(loggedIn);
+        
+        // Immediate sync to Supabase profiles table
+        try {
+          const { createUserInSupabase } = await import("./utils/supabase");
+          await createUserInSupabase(loggedIn);
+          console.log("Successfully synced login to Supabase profiles.");
+        } catch (syncErr) {
+          console.warn("Failed to immediately sync user login to Supabase:", syncErr);
+        }
       }
     } catch (err: any) {
       console.warn("Google Auth error via Firebase:", err);
-      setAuthError(`Google Auth failed: ${err.message || "Please check connection."}`);
+      let errMsg = err.message || "Please check connection.";
+      if (err.code === "auth/unauthorized-domain" || errMsg.includes("unauthorized-domain") || errMsg.includes("unauthorized domain")) {
+        errMsg = "Security Check: Please ensure this domain is whitelisted in Firebase Console.";
+      } else {
+        errMsg = `Google Auth failed: ${errMsg}`;
+      }
+      setAuthError(errMsg);
     } finally {
       setIsAuthenticatingGoogle(false);
     }
@@ -644,6 +673,7 @@ export default function App() {
                         role: "client" as const
                       };
                       localStorage.setItem("bato_user_session", JSON.stringify(guestUser));
+                      localStorage.setItem("bato_sam_current_user", JSON.stringify(guestUser));
                       window.dispatchEvent(new Event("bato_user_session_changed"));
                       setShowLoginModal(false);
                     }}

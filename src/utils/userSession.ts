@@ -171,7 +171,7 @@ export function incrementLiveShares() {
   window.dispatchEvent(new Event("bato_analytics_updated"));
 }
 
-export function registerOrLoginGoogleUser(fullName: string, email: string, avatarUrl: string): UserAccount {
+export function registerOrLoginGoogleUser(fullName: string, email: string, avatarUrl: string, firebaseUid?: string): UserAccount {
   const users = getStoredUsers();
   const cleanEmail = email.trim().toLowerCase();
   
@@ -182,6 +182,9 @@ export function registerOrLoginGoogleUser(fullName: string, email: string, avata
   let found = users.find(u => u.email.trim().toLowerCase() === cleanEmail);
   
   if (found) {
+    if (firebaseUid) {
+      found.id = firebaseUid;
+    }
     // Update existing user with Google details
     found.fullName = found.fullName || fullName;
     found.avatarUrl = avatarUrl;
@@ -191,13 +194,16 @@ export function registerOrLoginGoogleUser(fullName: string, email: string, avata
     localStorage.setItem("bato_sam_registered_users", JSON.stringify(users));
     localStorage.setItem("bato_sam_current_user", JSON.stringify(found));
     
+    // Sync update to Supabase
+    createUserInSupabase(found).catch(err => console.warn("Supabase user save bypassed:", err));
+    
     window.dispatchEvent(new Event("bato_user_session_changed"));
     return found;
   }
   
   // Create a new user account
   const randId = Math.floor(1000 + Math.random() * 9000);
-  const id = `BATO-CLI-${randId}`;
+  const id = firebaseUid || `BATO-CLI-${randId}`;
   const inviteCode = `BATO-INV-${randId}`;
   
   const newUser: UserAccount = {
@@ -212,10 +218,25 @@ export function registerOrLoginGoogleUser(fullName: string, email: string, avata
     isGoogleUser: true,
     role: defaultRole
   };
+
+  // Referral Points Credit System (100 PTS to Referrer in Supabase)
+  const referredBy = typeof window !== "undefined" ? localStorage.getItem("bato_sam_referred_by") : null;
+  if (referredBy) {
+    (newUser as any).referredBy = referredBy;
+    import("./supabase").then(({ creditReferralPoints }) => {
+      creditReferralPoints(referredBy, fullName).catch(err => console.warn("Failed to credit referral reward:", err));
+    });
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("bato_sam_referred_by");
+    }
+  }
   
   users.push(newUser);
   localStorage.setItem("bato_sam_registered_users", JSON.stringify(users));
   localStorage.setItem("bato_sam_current_user", JSON.stringify(newUser));
+  
+  // Sync new user to Supabase
+  createUserInSupabase(newUser).catch(err => console.warn("Supabase user save bypassed:", err));
   
   window.dispatchEvent(new Event("bato_user_session_changed"));
   return newUser;

@@ -14,6 +14,7 @@ export interface CACJob {
   cacData?: string;
   assignedTo?: string;
   assignedToName?: string;
+  proofUrl?: string;
 }
 
 export interface PrintJob {
@@ -32,6 +33,7 @@ export interface PrintJob {
   paymentRef?: string;
   assignedTo?: string;
   assignedToName?: string;
+  proofUrl?: string;
 }
 
 export interface EnrollmentJob {
@@ -50,6 +52,7 @@ export interface EnrollmentJob {
   totalCost?: number;
   assignedTo?: string;
   assignedToName?: string;
+  proofUrl?: string;
 
   // Additional 5-step admissions wizard fields
   dob?: string;

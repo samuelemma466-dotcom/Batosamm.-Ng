@@ -18,7 +18,7 @@ export default function FloatingAssistant() {
   const [isMuted, setIsMuted] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [savedKey, setSavedKey] = useState("");
-  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
+  const [selectedModel, setSelectedModel] = useState("gemini-1.5-flash");
   const [isError, setIsError] = useState(false);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -208,7 +208,7 @@ export default function FloatingAssistant() {
     if (savedKey) {
       try {
         const genAI = new GoogleGenerativeAI(savedKey);
-        const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash" });
+        const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-1.5-flash" });
 
         const systemInstruction = 
           "You are the 'Bato Sam Concierge', the official AI assistant for BATO SAM. NG.\n" +

@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { saveJob } from "../utils/localStorage";
-import { createOrderInSupabase } from "../utils/supabase";
+import { createOrderInSupabase, uploadProofToSupabase, sendAdminAlert } from "../utils/supabase";
 import { getCurrentUser } from "../utils/userSession";
 
 export default function StudentPortal() {
@@ -139,6 +139,9 @@ export default function StudentPortal() {
   const [showOPayModal, setShowOPayModal] = useState(false);
   const [opayVerifying, setOpayVerifying] = useState(false);
   const [opayRef, setOpayRef] = useState("");
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
+  const [proofError, setProofError] = useState("");
 
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -282,86 +285,16 @@ export default function StudentPortal() {
       return;
     }
 
-    if (paymentMethod === "opay") {
-      const generatedRef = `OPAY-JOV-${Math.floor(100000 + Math.random() * 900000)}`;
-      setOpayRef(generatedRef);
-      setPaying(true);
-      setShowOPayModal(true);
-      return;
-    }
-
+    // Always show the Bank Transfer Modal
+    const generatedRef = `BATO-JOV-${Math.floor(100000 + Math.random() * 900000)}`;
+    setOpayRef(generatedRef);
     setPaying(true);
-
-    const ref = `JOVIBE-${Math.floor(100000 + Math.random() * 900000)}`;
-    const costInNGN = getAmountToPay();
-    const paystackKey = localStorage.getItem("bato_sam_paystack_public_key") || "pk_test_bato_sam_digital_hub_9999_secret_key";
-    
-    // Default or parsed email address for Paystack transactions
-    const customerEmail = email.trim() || `${phone.replace(/\s+/g, "")}@jovibecode.com`;
-
-    if (paystackLoaded && (window as any).PaystackPop) {
-      try {
-        const handler = (window as any).PaystackPop.setup({
-          key: paystackKey.trim(),
-          email: customerEmail,
-          amount: costInNGN * 100, // kobo
-          currency: "NGN",
-          ref: ref,
-          metadata: {
-            custom_fields: [
-              { display_name: "Student Name", variable_name: "student_name", value: fullName },
-              { display_name: "Selected Courses", variable_name: "selected_courses", value: selectedSkills.join(", ") },
-              { display_name: "Payment Plan", variable_name: "payment_plan", value: paymentOption === "full" ? "Full Fee (₦5,500)" : "1st Installment (₦2,750)" }
-            ]
-          },
-          callback: async (response: any) => {
-            const finalRef = response.reference || ref;
-            setPaymentReference(finalRef);
-            await completeEnrollment(finalRef);
-          },
-          onClose: () => {
-            setPaying(false);
-            setError("Payment was cancelled. Completion of certificate payment is required to activate enrollment.");
-          }
-        });
-        handler.openIframe();
-      } catch (err: any) {
-        console.warn("Paystack popup failed, running simulated fallback:", err);
-        runSimulatedPayment(ref);
-      }
-    } else {
-      runSimulatedPayment(ref);
-    }
+    setShowOPayModal(true);
   };
 
-  const runSimulatedPayment = (ref: string) => {
-    const costInNGN = getAmountToPay();
-    const confirmPayment = window.confirm(
-      `[Jovibe Code Admissions - Paystack Sandbox Gateway]\n\n` +
-      `Initialize Checkout for: ${fullName}\n` +
-      `Selected Skill(s): ${selectedSkills.join(" & ")}\n` +
-      `LGA/State: ${lga}, ${stateOfOrigin} State\n` +
-      `Payment Tier: ₦${costInNGN.toLocaleString()} NGN (${paymentOption === "full" ? "Full Certificate Fee" : "Installment 1 of 2"})\n` +
-      `Transaction Ref: ${ref}\n\n` +
-      `Click OK to authorize test payment successfully and secure your admissions badge.`
-    );
-
-    if (confirmPayment) {
-      setTimeout(async () => {
-        setPaymentReference(ref);
-        await completeEnrollment(ref);
-      }, 500);
-    } else {
-      setPaying(false);
-      setError("Payment cancelled by candidate.");
-    }
-  };
-
-  const completeEnrollment = async (refId: string) => {
+  const completeEnrollment = async (refId: string, proofUrl?: string) => {
     const admissionsDeskPhone = "2349043017213"; // 09043017213
-    const isOpay = refId.startsWith("OPAY-");
-    const gatewayLabel = isOpay ? "OPay Transfer" : "Paystack Inline";
-    const payPlanText = paymentOption === "full" ? `₦5,500 Full Certificate Fee (via ${gatewayLabel})` : `₦2,750 Installment (1 of 2) (via ${gatewayLabel})`;
+    const payPlanText = paymentOption === "full" ? `₦5,500 Full Certificate Fee (via Bank Transfer)` : `₦2,750 Installment (1 of 2) (via Bank Transfer)`;
     
     const waText = encodeURIComponent(
       `*JOVIBE CODE ADMISSION APPLICATION (Sponsored by BATOSAM NIG.)*\n\n` +
@@ -379,7 +312,7 @@ export default function StudentPortal() {
       `• *Maintenance Fee rule:* ₦200 per class accepted\n` +
       `• *Paid Certificate Fee:* ${payPlanText}\n` +
       `• *Payment Reference:* ${refId}\n` +
-      `• *Enrollment Status:* ENROLLED & SECURED (via ${gatewayLabel})\n\n` +
+      `• *Enrollment Status:* Awaiting Approval (via Bank Transfer)\n\n` +
       `Dear Admissions Desk, I have successfully applied and paid my certificate fee. Please confirm my enrollment.`
     );
 
@@ -392,7 +325,7 @@ export default function StudentPortal() {
       email: email.trim() || `${phone.replace(/\s+/g, "")}@jovibecode.com`,
       phone,
       course: selectedSkills.join(", "),
-      status: "Enrolled",
+      status: "Awaiting Approval", // Set status to Awaiting Approval for manual validation
       timestamp: new Date().toISOString(),
       whatsappMessage: `https://wa.me/${admissionsDeskPhone}?text=${waText}`,
       paymentRef: refId,
@@ -409,12 +342,18 @@ export default function StudentPortal() {
       religion,
       skillsSelected: selectedSkills,
       commitmentSigned,
-      paymentOption
+      paymentOption,
+      proofUrl: proofUrl || null
     };
 
     try {
       await createOrderInSupabase(newJob);
       saveJob(newJob);
+
+      // Trigger EmailJS notification alert to Admin
+      await sendAdminAlert(
+        `New student academy enrollment awaiting verification! ID: ${newJob.id}, Student: ${fullName}, Amount: NGN ${getAmountToPay().toLocaleString()}`
+      );
     } catch (dbErr) {
       console.warn("Saving to database bypassed, saved locally:", dbErr);
       saveJob(newJob);
@@ -1315,122 +1254,161 @@ export default function StudentPortal() {
       </div>
 
       {showOPayModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
-          <div className="w-full max-w-md rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden text-zinc-900 dark:text-rose-100 animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+          <div className="w-full max-w-md rounded-[28px] border border-zinc-800 bg-zinc-950 p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden text-zinc-100 animate-in fade-in zoom-in-95 duration-200">
             <button 
               type="button"
               onClick={() => {
                 setShowOPayModal(false);
                 setPaying(false);
+                setProofFile(null);
+                setProofError("");
               }}
-              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-900 dark:text-rose-300 dark:hover:text-white transition-colors cursor-pointer text-sm font-bold bg-transparent border-0"
+              className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors cursor-pointer text-sm font-bold bg-transparent border-0"
             >
               ✕
             </button>
 
             <div className="text-center space-y-2">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-[#D4AF37]">
-                <span className="font-sans text-xl font-black">₦</span>
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[16px] bg-zinc-900 border border-zinc-800 text-white">
+                <span className="font-mono text-xl font-black text-[#D4AF37]">₦</span>
               </div>
-              <h3 className="text-lg font-black uppercase text-zinc-900 dark:text-white tracking-wider">
-                {opayVerifying ? "Verifying Transaction" : "OPay Bank Transfer"}
+              <h3 className="text-base font-extrabold text-white uppercase tracking-wider font-sans">
+                {uploadingProof ? "Uploading Proof..." : "Bato Sam Bank Transfer"}
               </h3>
-              <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold max-w-xs mx-auto leading-normal">
-                {opayVerifying 
-                  ? "Please hold while our automated system performs real-time ledger reconciliation with OPay API..."
-                  : "Please make an instant transfer of the exact certificate fee to secure your admissions badge."
+              <p className="text-[10px] text-zinc-400 font-semibold max-w-xs mx-auto leading-normal">
+                {uploadingProof 
+                  ? "Transmitting payment voucher screenshot to secure cloud ledger. Please hold..."
+                  : "Complete manual bank transfer of the specified amount and upload the screenshot proof below."
                 }
               </p>
             </div>
 
-            {opayVerifying ? (
+            {uploadingProof ? (
               <div className="py-8 flex flex-col items-center justify-center gap-4">
                 <Loader2 className="h-10 w-10 animate-spin text-[#D4AF37]" />
-                <span className="text-xs font-mono font-bold tracking-widest text-[#D4AF37] animate-pulse uppercase">
-                  Checking ledger for reference...
+                <span className="text-xs font-mono font-bold tracking-widest text-zinc-500 animate-pulse uppercase">
+                  Uploading proof screenshot...
                 </span>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="bg-zinc-50 dark:bg-zinc-950 rounded-xl p-4 border border-zinc-200 dark:border-zinc-800 space-y-3 font-sans text-xs">
-                  <div className="flex justify-between items-center pb-2 border-b border-zinc-100 dark:border-zinc-900">
-                    <span className="text-zinc-500 dark:text-rose-100/50 font-medium">Bank Name</span>
-                    <span className="font-extrabold text-zinc-900 dark:text-white">OPay</span>
+                {/* Bank Account Ledger Details */}
+                <div className="bg-zinc-900/60 rounded-[18px] p-4 border border-zinc-800/80 space-y-3 font-mono text-xs text-zinc-100">
+                  <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
+                    <span className="text-zinc-500 font-medium">Bank Name</span>
+                    <span className="font-extrabold text-zinc-300">OPay / Moniepoint</span>
                   </div>
-                  <div className="flex justify-between items-center pb-2 border-b border-zinc-100 dark:border-zinc-900">
-                    <span className="text-zinc-500 dark:text-rose-100/50 font-medium">Account Number</span>
+                  <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
+                    <span className="text-zinc-500 font-medium">Account Number</span>
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText("08064909999");
-                      }}
-                      className="font-mono font-extrabold text-amber-600 dark:text-yellow-400 hover:underline cursor-pointer flex items-center gap-1 bg-transparent border-0"
-                    >
-                      <span>08064909999</span>
-                      <span className="text-[9px] text-[#D4AF37] font-normal">(Copy)</span>
-                    </button>
-                  </div>
-                  <div className="flex justify-between items-center pb-2 border-b border-zinc-100 dark:border-zinc-900">
-                    <span className="text-zinc-500 dark:text-rose-100/50 font-medium">Account Name</span>
-                    <span className="font-extrabold text-zinc-900 dark:text-white">BATOSAM NIG.</span>
-                  </div>
-                  <div className="flex justify-between items-center pb-2 border-b border-zinc-100 dark:border-zinc-900">
-                    <span className="text-zinc-500 dark:text-rose-100/50 font-medium">Amount to Pay</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(getAmountToPay().toString());
-                      }}
-                      className="font-extrabold text-amber-600 dark:text-yellow-400 hover:underline cursor-pointer flex items-center gap-1 bg-transparent border-0"
-                    >
-                      <span>₦{getAmountToPay().toLocaleString()} NGN</span>
-                      <span className="text-[9px] text-[#D4AF37] font-normal">(Copy)</span>
-                    </button>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-zinc-500 dark:text-rose-100/50 font-medium text-[10px]">Transfer Description / Memo</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(opayRef);
+                        navigator.clipboard.writeText("09135580911");
                       }}
                       className="font-mono font-extrabold text-[#D4AF37] hover:underline cursor-pointer flex items-center gap-1 bg-transparent border-0"
                     >
-                      <span>{opayRef}</span>
-                      <span className="text-[9px] text-[#D4AF37]/80 font-normal">(Copy)</span>
+                      <span>09135580911</span>
+                      <span className="text-[9px] text-zinc-500 font-normal">(Copy)</span>
                     </button>
+                  </div>
+                  <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
+                    <span className="text-zinc-500 font-medium">Account Name</span>
+                    <span className="font-extrabold text-zinc-300">Bato Sam Nig</span>
+                  </div>
+                  <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
+                    <span className="text-zinc-500 font-medium">Amount to Pay</span>
+                    <span className="font-extrabold text-[#D4AF37] text-sm">
+                      ₦{getAmountToPay().toLocaleString()} NGN
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-zinc-500 font-medium text-[10px]">Reference / Memo</span>
+                    <span className="font-mono font-extrabold text-zinc-400">
+                      {opayRef}
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex gap-2 text-[9px] text-zinc-500 dark:text-zinc-400 font-semibold leading-relaxed bg-zinc-100 dark:bg-zinc-950/50 p-3 rounded-lg border border-zinc-200 dark:border-zinc-800">
-                  <span className="text-[#D4AF37] shrink-0">ℹ</span>
-                  <span>
-                    Include the unique reference <strong className="text-[#D4AF37] font-extrabold">{opayRef}</strong> as the bank transfer memo/narration to ensure real-time auto-reconciliation.
-                  </span>
+                {/* Mandatory Payment Screenshot Uploader */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    Upload Payment Screenshot <span className="text-red-500">*</span>
+                  </label>
+                  
+                  <div className="relative group rounded-[16px] border border-dashed border-zinc-800 hover:border-[#D4AF37]/40 bg-zinc-900/30 hover:bg-zinc-900/60 transition-all p-4 text-center cursor-pointer">
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setProofFile(e.target.files[0]);
+                          setProofError("");
+                        }
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                    />
+                    <div className="space-y-2">
+                      <div className="mx-auto h-8 w-8 rounded-full bg-zinc-900 flex items-center justify-center text-zinc-500 group-hover:text-[#D4AF37] transition-colors">
+                        📷
+                      </div>
+                      <div className="text-xs text-zinc-300">
+                        {proofFile ? (
+                          <span className="font-bold text-[#D4AF37] truncate max-w-[200px] block mx-auto">
+                            📎 {proofFile.name}
+                          </span>
+                        ) : (
+                          <span>Tap here or drag to upload transfer alert / screenshot</span>
+                        )}
+                      </div>
+                      <p className="text-[9px] text-zinc-500">Supports PNG, JPG, JPEG files</p>
+                    </div>
+                  </div>
+                  {proofError && (
+                    <p className="text-[10px] text-red-500 font-bold mt-1">⚠️ {proofError}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2 pt-2">
                   <button
                     type="button"
                     onClick={async () => {
-                      setOpayVerifying(true);
-                      setTimeout(async () => {
-                        setOpayVerifying(false);
+                      if (!proofFile) {
+                        setProofError("Please select/upload a screenshot of your bank transfer receipt.");
+                        return;
+                      }
+                      setUploadingProof(true);
+                      setProofError("");
+                      try {
+                        const { url, error } = await uploadProofToSupabase(proofFile);
+                        if (error || !url) {
+                          setProofError("Server error uploading payment proof. Please try again.");
+                          setUploadingProof(false);
+                          return;
+                        }
+                        setUploadingProof(false);
                         setShowOPayModal(false);
-                        await completeEnrollment(opayRef);
-                      }, 3000);
+                        await completeEnrollment(opayRef, url);
+                        setProofFile(null);
+                      } catch (err) {
+                        console.error("Proof submission failure:", err);
+                        setProofError("An unexpected error occurred during submission.");
+                        setUploadingProof(false);
+                      }
                     }}
-                    className="w-full rounded-xl bg-[#D4AF37] hover:bg-[#D4AF37]/90 py-3.5 text-xs font-black text-slate-950 transition-all cursor-pointer uppercase tracking-wider text-center border-0"
+                    className="w-full rounded-[16px] bg-[#D4AF37] hover:bg-[#D4AF37]/90 py-3.5 text-xs font-black text-slate-950 transition-all cursor-pointer uppercase tracking-wider text-center border-0"
                   >
-                    I Have Completed Transfer
+                    Upload Proof & Complete Enrollment
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       setShowOPayModal(false);
                       setPaying(false);
+                      setProofFile(null);
+                      setProofError("");
                     }}
-                    className="w-full text-[10px] font-mono font-bold text-zinc-500 hover:text-zinc-900 dark:text-rose-300 dark:hover:text-white uppercase tracking-widest transition-colors py-1 cursor-pointer bg-transparent border-0"
+                    className="w-full text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest hover:text-zinc-400 transition-colors py-1 cursor-pointer bg-transparent border-0"
                   >
                     Cancel & Modify Form
                   </button>

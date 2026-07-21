@@ -49,6 +49,7 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [role, setRole] = useState<"ADMIN" | "STAFF" | "CLIENT" | null>(null);
   const [error, setError] = useState("");
+  const [selectedProofUrl, setSelectedProofUrl] = useState<string | null>(null);
   const [expandedFolder, setExpandedFolder] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState({ visitors: 0, shares: 0 });
 
@@ -609,6 +610,7 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                             <th className="p-4">Residency & Origin</th>
                             <th className="p-4">Religion</th>
                             <th className="p-4">Skills / Course</th>
+                            <th className="p-4">Payment Proof</th>
                             <th className="p-4">{role === "ADMIN" ? "Payment & Ref ID" : "Fulfillment Info"}</th>
                             <th className="p-4">Enrollment Status</th>
                           </tr>
@@ -658,6 +660,21 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                                 <p className="text-yellow-500 font-extrabold max-w-[180px] leading-tight">{job.course}</p>
                               </td>
 
+                              {/* Payment Proof Column */}
+                              <td className="p-4 whitespace-nowrap">
+                                {job.proofUrl ? (
+                                  <button
+                                    onClick={() => setSelectedProofUrl(job.proofUrl || null)}
+                                    className="inline-flex items-center gap-1.5 bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 border border-[#D4AF37]/30 rounded-lg px-2.5 py-1.5 text-[9px] font-black uppercase text-[#D4AF37] tracking-wider transition-all cursor-pointer"
+                                  >
+                                    <Eye className="h-3 w-3" />
+                                    <span>Verify Proof</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-zinc-400 font-medium italic text-[10px]">None Uploaded</span>
+                                )}
+                              </td>
+
                               {/* Payment & Ref ID */}
                               <td className="p-4 whitespace-nowrap">
                                 {role === "ADMIN" ? (
@@ -681,7 +698,9 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                                 <div className="flex items-center gap-2">
                                   <select
                                     value={
-                                      job.status === "Pending" || job.status === "In Review" || job.status === "Pending Verification"
+                                      job.status === "Awaiting Approval"
+                                        ? "Awaiting Approval"
+                                        : job.status === "Pending" || job.status === "In Review" || job.status === "Pending Verification"
                                         ? "Pending"
                                         : job.status === "Processing" || job.status === "Working on it"
                                         ? "Processing"
@@ -693,6 +712,7 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                                       if (newStatus === "Pending") mapped = "In Review";
                                       else if (newStatus === "Processing") mapped = "Working on it";
                                       else if (newStatus === "Completed") mapped = "Ready for Pickup";
+                                      else if (newStatus === "Awaiting Approval") mapped = "Awaiting Approval";
                                       
                                       updateJobStatus(job.id, mapped);
                                       try {
@@ -706,6 +726,7 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                                     }}
                                     className="bg-zinc-50/30 border border-zinc-200/80 rounded-lg px-2 py-1.5 text-[10px] text-[#1D1D1F] font-black uppercase outline-none focus:border-zinc-400 cursor-pointer"
                                   >
+                                    <option value="Awaiting Approval">Awaiting Approval</option>
                                     <option value="Pending">Pending</option>
                                     <option value="Processing">Processing</option>
                                     <option value="Completed">Completed</option>
@@ -747,6 +768,7 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                             <th className="p-4">Customer Contact</th>
                             <th className="p-4">Submission Date</th>
                             <th className="p-4">Assignee</th>
+                            <th className="p-4">Payment Proof</th>
                             <th className="p-4">Fulfillment Status</th>
                           </tr>
                         </thead>
@@ -904,12 +926,29 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                                 )}
                               </td>
 
+                              {/* Payment Proof Column */}
+                              <td className="p-4 whitespace-nowrap">
+                                {job.proofUrl ? (
+                                  <button
+                                    onClick={() => setSelectedProofUrl(job.proofUrl || null)}
+                                    className="inline-flex items-center gap-1.5 bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 border border-[#D4AF37]/30 rounded-lg px-2.5 py-1.5 text-[9px] font-black uppercase text-[#D4AF37] tracking-wider transition-all cursor-pointer"
+                                  >
+                                    <Eye className="h-3 w-3" />
+                                    <span>Verify Proof</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-zinc-400 font-medium italic text-[10px]">None Uploaded</span>
+                                )}
+                              </td>
+
                               {/* STATUS TOGGLE */}
                               <td className="p-4 whitespace-nowrap">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                                   <select
                                     value={
-                                      job.status === "Pending" || job.status === "In Review" || job.status === "Pending Verification"
+                                      job.status === "Awaiting Approval"
+                                        ? "Awaiting Approval"
+                                        : job.status === "Pending" || job.status === "In Review" || job.status === "Pending Verification"
                                         ? "Pending"
                                         : job.status === "Processing" || job.status === "Working on it"
                                         ? "Processing"
@@ -921,6 +960,7 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                                       if (newStatus === "Pending") mapped = "In Review";
                                       else if (newStatus === "Processing") mapped = "Working on it";
                                       else if (newStatus === "Completed") mapped = "Ready for Pickup";
+                                      else if (newStatus === "Awaiting Approval") mapped = "Awaiting Approval";
                                       
                                       updateJobStatus(job.id, mapped);
                                       try {
@@ -934,6 +974,7 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                                     }}
                                     className="bg-zinc-50/30 border border-zinc-200/80 rounded-lg px-2 py-1.5 text-[10px] text-[#1D1D1F] font-black uppercase outline-none focus:border-zinc-400 cursor-pointer"
                                   >
+                                    <option value="Awaiting Approval">Awaiting Approval</option>
                                     <option value="Pending">Pending</option>
                                     <option value="Processing">Processing</option>
                                     <option value="Completed">Completed</option>
@@ -1628,7 +1669,46 @@ export default function AdminDashboard({ onLogout, isAdminAuthenticated }: Admin
                 </div>
               )}
             </div>
+          </div>
+        )}
 
+        {/* Lightbox Receipt modal */}
+        {selectedProofUrl && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-xl rounded-[28px] border border-zinc-800 bg-zinc-950 p-6 space-y-4 shadow-2xl relative overflow-hidden text-zinc-100">
+              <button 
+                type="button"
+                onClick={() => setSelectedProofUrl(null)}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-white transition-colors cursor-pointer text-xs font-bold bg-transparent border-0 z-20"
+              >
+                ✕ Close
+              </button>
+              <div className="text-center space-y-1">
+                <h3 className="text-xs font-extrabold text-white uppercase tracking-wider font-sans">
+                  Verify Bank Transfer Screenshot
+                </h3>
+                <p className="text-[10px] text-zinc-500">
+                  Ensure the payment transfer narration or reference matches transaction logs.
+                </p>
+              </div>
+              <div className="relative rounded-[16px] border border-zinc-800 overflow-hidden bg-zinc-900/40 flex items-center justify-center max-h-[60vh] p-1">
+                <img 
+                  src={selectedProofUrl} 
+                  alt="Payment proof transfer receipt screenshot"
+                  referrerPolicy="no-referrer"
+                  className="max-h-[50vh] object-contain rounded-lg w-full select-none"
+                />
+              </div>
+              <div className="flex justify-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedProofUrl(null)}
+                  className="rounded-full bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-zinc-950 font-sans font-black uppercase text-[10px] tracking-widest px-6 py-2.5 transition-all cursor-pointer border-0"
+                >
+                  Confirm & Dismiss
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
